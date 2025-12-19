@@ -2,7 +2,7 @@ import { PlaybackState } from "./PlaybackState.js";
 import { PlaybackEvents } from "./PlaybackEvents.js";
 import { fetchCurrentPlayback } from "./SpotifyAPI.js";
 import { getAccessToken, getRefreshToken, setAccessToken } from './TokenStore.js';
-import { refreshAccessToken } from './SpotifyAuth.js';
+import { auth } from './main.js';
 
 
 async function pollOnce(events: PlaybackEvents) {
@@ -11,7 +11,7 @@ async function pollOnce(events: PlaybackEvents) {
     } catch (err: any) {
 
         if (err.response?.status === 401) {
-            const newToken = await refreshAccessToken(getRefreshToken());
+            const newToken = await auth.refreshAccessToken(getRefreshToken());
             setAccessToken(newToken);
 
             // retry once

@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { BrowserWindow } from 'electron';
 dotenv.config();
 
 import { shell } from 'electron';
@@ -19,9 +20,10 @@ export class SpotifyAuth {
     private app = express();
     private playbackEvents = new PlaybackEvents();
 
-    constructor() {
+    constructor(mainWindow: BrowserWindow) {
         this.setupAuthUrl();
         this.setupCallbackRoute();
+        this.playbackEvents.setMainWindow(mainWindow);
     }
 
     private async setupAuthUrl() {

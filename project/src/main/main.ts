@@ -3,6 +3,7 @@ import path from "path";
 import { SpotifyAuth } from "./SpotifyAuth.js";
 
 let win: BrowserWindow | null = null;
+export var auth: SpotifyAuth;
 
 function createWindow() {
   win = new BrowserWindow({
@@ -27,10 +28,9 @@ function createWindow() {
       path.join(__dirname, "../renderer/index.html")
     );
   }
+  
+  auth = new SpotifyAuth(win);
+  auth.start();
 }
 
 app.whenReady().then(createWindow);
-
-
-export const auth = new SpotifyAuth();
-auth.start();

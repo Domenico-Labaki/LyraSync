@@ -1,25 +1,56 @@
-import { PlaybackState } from "./PlaybackState.js";
+import axios from 'axios';
+import { getAccessToken } from './TokenStore';
+import { PlaybackState } from './PlaybackState';
 
-// Fetch the current playback state from the Spotify API
-export async function fetchCurrentPlayback(accessToken: string): Promise<PlaybackState | null> {
-    
-    const response = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
-        headers: {
-            Authorization: `Bearer ${accessToken}`,
+export class RateLimitError extends Error {
+    public readonly retryAfterMs: number;
+
+    constructor(retryAfterMs: number) {
+        super('Spotify rate limit exceeded');
+        this.retryAfterMs = retryAfterMs;
+    }
+}
+
+export async function getCurrentPlayback(): Promise<PlaybackState | null> {
+    try {
+        const response = await axios.get(
+            'https://api.spotify.com/v1/me/player',
+            {
+                headers: {
+                    Authorization: `Bearer ${getAccessToken()}`
+                },
+                validateStatus: () => true
+            }
+        );
+
+        if (response.status === 204) {
+            return null;
         }
-    });
 
-    // Check if nothing is playing
-    if (response.status == 202 || response.status == 204) {return null;}
+        if (response.status === 429) {
+            const retryAfterSec = Number(response.headers['retry-after'] ?? 1);
+            throw new RateLimitError(retryAfterSec * 1000);
+        }
 
-    const data = await response.json();
+        if (response.status === 401) {
+            throw new Error('UNAUTHORIZED');
+        }
 
-    return new PlaybackState(
-        data.item.id,
-        data.item.name, 
-        data.item.artists.map((a: any) => a.name).join(', '),
-        data.progress_ms,
-        data.item.duration_ms,
-        data.is_playing
-    );
+        if (response.status >= 400) {
+            throw new Error(`Spotify API error ${response.status}`);
+        }
+
+        const data = response.data;
+
+        return new PlaybackState(
+            data.item?.id ?? '',
+            data.item?.name ?? '',
+            data.item?.artists?.map((a: any) => a.name).join(', ') ?? '',
+            data.progress_ms ?? 0,
+            data.item?.duration_ms ?? 0,
+            data.is_playing ?? false
+        );
+    } catch (err) {
+        throw err;
+    }
 }

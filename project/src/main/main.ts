@@ -24,11 +24,20 @@ function createWindow() {
     }
   });
 
-  win.setIgnoreMouseEvents(false);
+  win.setIgnoreMouseEvents(true, { forward: true });
 
-  ipcMain.on('set-ignore-mouse', (_, ignore) => {
-    win.setIgnoreMouseEvents(ignore, { forward: true });
-  });
+  setInterval(() => {
+    const cursor = screen.getCursorScreenPoint();
+    const bounds = win.getBounds();
+
+    const inside =
+      cursor.x >= bounds.x &&
+      cursor.x <= bounds.x + bounds.width &&
+      cursor.y >= bounds.y &&
+      cursor.y <= bounds.y + bounds.height;
+
+    win.webContents.send("hover-state", inside);
+  }, 16); // ~60fps
 
   if (process.env.NODE_ENV === "development") {
     win.loadURL("http://localhost:5173");

@@ -6,7 +6,7 @@ declare global {
   interface Window {
     api: {
       onPlaybackStateChanged: (callback: (state: PlaybackState) => void) => void;
-      setIgnoreMouseEvents: (ignore: boolean) => void;
+      onHoverChanged: (callback: (hovered: boolean) => void) => void;
     };
   }
 }
@@ -31,15 +31,16 @@ export default function App() {
   const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
-    window.api.setIgnoreMouseEvents(isHovered);
-  }, [isHovered]);
+    window.api.onHoverChanged(setIsHovered);
+  }, []);
 
-  // TODO: fix issue where it doesn't fade back in when mouse exits
   return (
     <div
-    style={{ ...container, opacity: isHovered ? 0.15 : 1}}
-    onMouseEnter={() => setIsHovered(true)}
-    onMouseLeave={() => setIsHovered(false)}
+    style={{
+      ...container,
+      opacity: isHovered ? 0.15 : 0.85,
+      transition: "opacity 0.15s ease"
+    }}
     >
       <div style={lyricsContainer}>
         Lyrics go here

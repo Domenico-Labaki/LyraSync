@@ -2,8 +2,9 @@ import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("api", {
     onPlaybackStateChanged: (callback: (state: any) => void) => {
-        ipcRenderer.on('playback-state-changed', (event, state) => callback(state));
+        ipcRenderer.on('playback-state-changed', (_, state) => callback(state));
     },
-    setIgnoreMouseEvents: (ignore: boolean) =>
-        ipcRenderer.send('set-ignore-mouse', ignore)
+    onHoverChanged: (callback: (state: any) => void) => {
+        ipcRenderer.on("hover-state", (_, state) => callback(state))
+    }
 });

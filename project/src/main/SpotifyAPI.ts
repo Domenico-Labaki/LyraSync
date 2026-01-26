@@ -42,14 +42,14 @@ export async function getCurrentPlayback(): Promise<PlaybackState | null> {
 
         const data = response.data;
 
-        return new PlaybackState(
-            data.item?.id ?? '',
-            data.item?.name ?? '',
-            data.item?.artists?.map((a: any) => a.name).join(', ') ?? '',
-            data.progress_ms ?? 0,
-            data.item?.duration_ms ?? 0,
-            data.is_playing ?? false
-        );
+        return new PlaybackState({
+            trackId: data.item?.id ?? '',
+            trackName: data.item?.name ?? '',
+            artist: data.item?.artists?.map((a: any) => a.name).join(', ') ?? '',
+            progressMs: data.progress_ms ?? 0,
+            durationMs: data.item?.duration_ms ?? 0,
+            isPlaying: data.is_playing ?? false
+        });
     } catch (err) {
         throw err;
     }

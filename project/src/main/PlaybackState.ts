@@ -1,27 +1,41 @@
+import { LyricsResult } from "./LyricsService";
+
+// Data transfer object
+export interface PlaybackDTO {
+    readonly trackId: string;
+    readonly trackName: string;
+    readonly artist: string;
+    readonly progressMs: number;
+    readonly durationMs: number;
+    readonly isPlaying: boolean;
+}
+
+export interface PlaybackWithLyrics extends PlaybackDTO {
+    lyrics?: LyricsResult | null;
+}
+
 export class PlaybackState {
 
-    public readonly trackId: string;
-    public readonly trackName: string;
-    public readonly artist: string;
-    private readonly progressMs: number;
-    private readonly durationMs: number;
-    private readonly isPlaying: boolean;
+    private dto: PlaybackDTO;
 
-    constructor(trackId = '', trackName = '', artist = '', progressMs = 0, durationMs = 0, isPlaying = false) {
-        this.trackId = trackId;
-        this.trackName = trackName;
-        this.artist = artist;
-        this.progressMs = progressMs;
-        this.durationMs = durationMs;
-        this.isPlaying = isPlaying;
+    constructor(dto: PlaybackDTO) {
+        this.dto = dto;
     }
 
     // Getters
-    public getProgressMs(): number { return this.progressMs; }
+    get trackId(): string { return this.dto.trackId; }
 
-    public getDurationMs(): number { return this.durationMs; }
+    get trackName(): string { return this.dto.trackName; }
 
-    public getIsPlaying(): boolean { return this.isPlaying; }
+    get artist(): string { return this.dto.artist; }
+
+    get progressMs(): number { return this.dto.progressMs; }
+
+    get durationMs(): number { return this.dto.durationMs; }
+
+    get isPlaying(): boolean { return this.dto.isPlaying; }
+
+    get progressRatio(): number { return this.dto.progressMs / this.dto.durationMs; }
 
     // Comparison methods
     public hasTrackChanged(other: PlaybackState): boolean {

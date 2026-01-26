@@ -34,8 +34,8 @@ export async function startPolling(
                     events.emit('trackChanged', state);
                 }
 
-                if (state.getIsPlaying() !== lastState.getIsPlaying()) {
-                    state.getIsPlaying()
+                if (state.isPlaying !== lastState.isPlaying) {
+                    state.isPlaying
                         ? events.emit('playbackResumed', state)
                         : events.emit('playbackPaused', state);
                 }

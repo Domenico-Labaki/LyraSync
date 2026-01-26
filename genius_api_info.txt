@@ -1,0 +1,11 @@
+LyraSync
+https://github.com/Domenico-Labaki/LyraSync
+
+Client ID
+hDa_RbdeDjwZ_b9acTMHDYp8qsyD2a3v5JjLvTggRfVXdpsdUTfDO0D94OVjyjks
+
+Client secret
+y61O21_RuFaIXLOw6XFdYenUXrSVbFrUP3og6ukcklc-CTQzhEUxBVv96saShvIwxy-AFsiHnyCJD9KrbORs1A
+
+Client Access Token
+IpmtQ4wPavcogexuCkbnNZehv9-GcV5Q4N_SFv3Vprd-_KReLy7qjKl-72KU_ivu

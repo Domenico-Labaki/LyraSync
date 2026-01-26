@@ -49,6 +49,7 @@ function createWindow() {
   
   auth = new SpotifyAuth(win);
   auth.start();
+  auth.loginIfNeeded();
 }
 
 app.whenReady().then(createWindow);

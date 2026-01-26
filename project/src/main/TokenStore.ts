@@ -1,6 +1,11 @@
 // TokenStore.ts
-let accessToken: string;
-let refreshToken: string;
+import keytar from "keytar";
+
+const SERVICE = "spotify-lyrics-overlay";
+
+let accessToken: string | undefined;
+
+// Access token stored in memory only
 
 export function setAccessToken(token: string) {
     accessToken = token;
@@ -10,10 +15,17 @@ export function getAccessToken() {
     return accessToken;
 }
 
-export function setRefreshToken(token: string) {
-    refreshToken = token;
+// Refresh token securely stored for persistent login
+
+export async function setRefreshToken(token: string) {
+    await keytar.setPassword(SERVICE, "refresh_token", token);
 }
 
-export function getRefreshToken() {
-    return refreshToken;
+export async function getRefreshToken(): Promise<string | null> {
+    return await keytar.getPassword(SERVICE, "refresh_token");
+}
+
+export async function clearTokens() {
+    accessToken = undefined;
+    await keytar.deletePassword(SERVICE, "refresh_token");
 }

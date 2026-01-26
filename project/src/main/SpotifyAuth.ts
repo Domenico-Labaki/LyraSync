@@ -7,7 +7,7 @@ import express from 'express';
 import axios from 'axios';
 import { startPolling } from './Poller.js';
 import { PlaybackEvents } from './PlaybackEvents.js';
-import { setAccessToken, setRefreshToken } from './TokenStore.js';
+import { setAccessToken, setRefreshToken, getRefreshToken } from './TokenStore.js';
 
 export class SpotifyAuth {
     private clientId = process.env.SPOTIFY_CLIENT_ID!;
@@ -21,12 +21,11 @@ export class SpotifyAuth {
     private playbackEvents = new PlaybackEvents();
 
     constructor(mainWindow: BrowserWindow) {
-        this.setupAuthUrl();
         this.setupCallbackRoute();
         this.playbackEvents.setMainWindow(mainWindow);
     }
 
-    private async setupAuthUrl() {
+    private async openAuthUrl() {
         try {
             const authUrl =
                 `https://accounts.spotify.com/authorize` +
@@ -65,7 +64,7 @@ export class SpotifyAuth {
                 const { access_token, refresh_token, expires_in } = response.data;
 
                 setAccessToken(access_token);
-                setRefreshToken(refresh_token);
+                await setRefreshToken(refresh_token);
 
                 console.log('Spotify authorization successful');
                 console.log('Access token expires in:', expires_in, 'seconds');
@@ -100,5 +99,26 @@ export class SpotifyAuth {
         });
 
         return response.data.access_token;
+    }
+
+    public async loginIfNeeded() {
+        const refreshToken = await getRefreshToken();
+
+        if (refreshToken) {
+            console.log("Found refresh token, refreshing access token...");
+
+            try {
+                const accessToken = await this.refreshAccessToken(refreshToken);
+                setAccessToken(accessToken);
+
+                startPolling(this.playbackEvents, 1000);
+                return;
+            } catch (err) {
+                console.error("Refresh failed, forcing re-login");
+            }
+        }
+
+        // No refresh token or refresh failed
+        await this.openAuthUrl();
     }
 }

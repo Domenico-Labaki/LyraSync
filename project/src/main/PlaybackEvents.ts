@@ -26,6 +26,7 @@ export class PlaybackEvents extends EventEmitter {
                 progressms: state.progressMs,
                 durationMs: state.durationMs,
                 isPlaying: state.isPlaying,
+                imgUrl: state.imgUrl,
                 lyrics: lyrics
             });
         }

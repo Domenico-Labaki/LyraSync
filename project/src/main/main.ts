@@ -24,7 +24,7 @@ function createWindow() {
     }
   });
 
-  win.setIgnoreMouseEvents(true, { forward: true });
+  win.setIgnoreMouseEvents(false);//true, { forward: true });
 
   setInterval(() => {
     const cursor = screen.getCursorScreenPoint();
@@ -46,6 +46,8 @@ function createWindow() {
       path.join(__dirname, "../renderer/index.html")
     );
   }
+
+  win.show();
   
   auth = new SpotifyAuth(win);
   auth.start();

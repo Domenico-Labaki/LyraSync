@@ -8,6 +8,7 @@ export interface PlaybackDTO {
     readonly progressMs: number;
     readonly durationMs: number;
     readonly isPlaying: boolean;
+    readonly imgUrl: string | null;
 }
 
 export interface PlaybackWithLyrics extends PlaybackDTO {
@@ -34,6 +35,8 @@ export class PlaybackState {
     get durationMs(): number { return this.dto.durationMs; }
 
     get isPlaying(): boolean { return this.dto.isPlaying; }
+
+    get imgUrl(): string | null {return this.dto.imgUrl; }
 
     get progressRatio(): number { return this.dto.progressMs / this.dto.durationMs; }
 

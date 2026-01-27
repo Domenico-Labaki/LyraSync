@@ -9,7 +9,9 @@
     "start": "npm run build && electron ."
   },
   "dependencies": {
+    "@janishutz/colorthief": "^3.0.2",
     "axios": "^1.13.2",
+    "colorthief": "^2.6.0",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "keytar": "^7.9.0",

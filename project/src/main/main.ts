@@ -1,6 +1,7 @@
 import { app, BrowserWindow, screen, ipcMain } from "electron";
 import path from "path";
 import { SpotifyAuth } from "./SpotifyAuth.js";
+import { clearToken, clearCachedToken, getRefreshToken } from "./TokenStore.js";
 
 let win: BrowserWindow;
 export var auth: SpotifyAuth;
@@ -24,8 +25,13 @@ function createWindow() {
     }
   });
 
-  win.setIgnoreMouseEvents(false);//true, { forward: true });
+  win.setIgnoreMouseEvents(false);
+  //win.setIgnoreMouseEvents(true, { forward: true });
 
+  let isIgnoringMouse = false;
+  let focusMode = false; // renderer-controlled: when true, allow passthrough in lyrics area
+
+  // Check cursor position ~60fps and toggle mouse event passthrough
   setInterval(() => {
     const cursor = screen.getCursorScreenPoint();
     const bounds = win.getBounds();
@@ -35,6 +41,18 @@ function createWindow() {
       cursor.x <= bounds.x + bounds.width &&
       cursor.y >= bounds.y &&
       cursor.y <= bounds.y + bounds.height;
+
+    const relY = cursor.y - bounds.y;
+    const inLyrics = inside && relY < bounds.height * 0.9; // top 90% is lyricsContainer
+    const inSongBar = inside && relY >= bounds.height * 0.9; // bottom 10% is songBar
+
+    if (inLyrics && focusMode && !isIgnoringMouse) {
+      isIgnoringMouse = true;
+      win.setIgnoreMouseEvents(true, { forward: true });
+    } else if ((inSongBar || !inside || !focusMode) && isIgnoringMouse) {
+      isIgnoringMouse = false;
+      win.setIgnoreMouseEvents(false);
+    }
 
     win.webContents.send("hover-state", inside);
   }, 16); // ~60fps
@@ -48,10 +66,51 @@ function createWindow() {
   }
 
   win.show();
+  // Receive focusMode updates from renderer
+  ipcMain.on('focus-mode', (_event, enabled: boolean) => {
+    focusMode = !!enabled;
+    if (!focusMode && isIgnoringMouse) {
+      isIgnoringMouse = false;
+      win.setIgnoreMouseEvents(false);
+    }
+  });
+
+  // Handle logout requests from renderer: clear stored tokens and stop polling
+  ipcMain.on('logout', async () => {
+    try {
+      // Stop polling if active
+      if (auth.stopPolling) {
+        auth.stopPolling();
+        auth.stopPolling = null;
+      }
+      
+      auth.playbackEvents.firstPlayback = true;
+      clearToken();
+      await clearCachedToken();
+      // Inform renderer to clear UI and show login screen
+      win.webContents.send('playback-state-changed', null);
+      win.webContents.send('auth-status', false);
+    } catch (err) {
+      console.error('Logout failed:', err);
+    }
+  });
   
   auth = new SpotifyAuth(win);
   auth.start();
-  auth.loginIfNeeded();
+
+  // Ensure renderer listener is registered before sending auth status
+  ipcMain.on('renderer-ready', () => {
+    auth.refreshLogin().then((success) => {
+      win.webContents.send('auth-status', success);
+    }).catch(() => {
+      win.webContents.send('auth-status', false);
+    });
+  });
+
+  // Allow renderer to explicitly start login flow
+  ipcMain.on('start-login', () => {
+    auth.openAuthUrl();
+  });
 }
 
 app.whenReady().then(createWindow);

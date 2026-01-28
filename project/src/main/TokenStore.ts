@@ -25,7 +25,10 @@ export async function getRefreshToken(): Promise<string | null> {
     return await keytar.getPassword(SERVICE, "refresh_token");
 }
 
-export async function clearTokens() {
+export function clearToken() {
     accessToken = undefined;
+}
+
+export async function clearCachedToken() {
     await keytar.deletePassword(SERVICE, "refresh_token");
 }

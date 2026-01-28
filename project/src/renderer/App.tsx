@@ -1,12 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PlaybackWithLyrics } from '../main/PlaybackState';
 import { getAccentColor, soften, isColorDark, lightenColor, hexToRGB, colors } from './theme/colors';
 
 declare global {
   interface Window {
     api: {
-      onPlaybackStateChanged: (callback: (state: PlaybackWithLyrics) => void) => void;
+      onPlaybackStateChanged: (callback: (state: PlaybackWithLyrics | null) => void) => void;
       onHoverChanged: (callback: (hovered: boolean) => void) => void;
+      onAuthStatus: (callback: (status: boolean) => void) => void;
+      startLogin: () => void;
+      rendererReady: () => void;
+      setFocusMode: ((enabled: boolean) => void);
+      logout: (() => void);
     };
   }
 }
@@ -17,15 +22,27 @@ export default function App() {
   const [accent, setAccent] = useState(hexToRGB(colors.primary.spotify));
   const [oldTrackId, setOldTrackId] = useState<string | null>(null);
   const [coverUrl, setCoverUrl] = useState<string>('');
+  const [focusMode, setFocusMode] = useState<boolean>(false);
+  const [authStatus, setAuthStatus] = useState<boolean | null>(null); // null = checking
 
   useEffect(() => {
     window.api.onPlaybackStateChanged((state) => {
+      if (!state) {
+        setPlaybackState(null);
+        setAuthStatus(false);
+        return;
+      }
+
       setPlaybackState(prev => ({
         ...prev,
         ...state,
-        lyrics: state.lyrics ?? prev?.lyrics ?? null
+        lyrics: (state as any).lyrics ?? prev?.lyrics ?? null
       }));
+      setAuthStatus(true);
     });
+
+    window.api.rendererReady?.();
+    window.api.onAuthStatus?.((s) => setAuthStatus(!!s));
   }, []);
 
   const displaySong = playbackState
@@ -36,12 +53,14 @@ export default function App() {
     ? `${playbackState.artist}`
     : '-';
 
+  const plainLyricsRef = useRef<HTMLDivElement>(null);
   // Update cover URL when track changes
   useEffect(() => {
     if (!oldTrackId || playbackState?.trackId !== oldTrackId) {
-      if (playbackState?.imgUrl) {
-        setCoverUrl(playbackState.imgUrl);
+      if (plainLyricsRef.current) { // There currently exists plain lyrics container
+        plainLyricsRef.current.scrollTop = 0;
       }
+      setCoverUrl(playbackState?.imgUrl ? playbackState.imgUrl : '');
       if (playbackState?.trackId) {
         setOldTrackId(playbackState.trackId);
       }
@@ -80,7 +99,7 @@ export default function App() {
 
     if (playbackState.lyrics.plain) {
       return (
-        <div style={plainLyrics}>
+        <div ref={plainLyricsRef} style={{...plainLyrics, color: focusMode? 'white': colors.text.primary}}>
           {playbackState.lyrics.plain}
         </div>
       );
@@ -89,21 +108,76 @@ export default function App() {
     return <div>Lyrics unavailable for this song</div>;
   }
 
+  function toggleFocusMode() {
+    const newVal = !focusMode;
+    setFocusMode(newVal);
+    window.api.setFocusMode?.(newVal);
+  }
+
+  function logOut() {
+    // Notify main process to clear stored tokens
+    window.api.logout?.();
+
+    setAuthStatus(false);
+
+    // Clear UI and playback state
+    setPlaybackState(null);
+    setCoverUrl('');
+    setOldTrackId(null);
+    setBg('');
+    setAccent(hexToRGB(colors.primary.spotify));
+    setFocusMode(false);
+  }
+
+  useEffect(() => {
+    // Ensure main process knows the initial focusMode
+    window.api.setFocusMode?.(focusMode);
+  }, []);
+
+  // Auth UI: show loader / login button if not authenticated
+  if (authStatus === null) {
+    return (
+      <div style={{...container, backgroundColor: colors.background.primary, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+        <div style={{color: colors.text.primary}}>Loading session...</div>
+      </div>
+    );
+  }
+
+  if (authStatus === false) {
+    return (
+      <div style={{...container, backgroundColor: colors.background.primary, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+        <div style={{textAlign: 'center'}}>
+          <div style={{color: colors.text.primary, marginBottom: 12}}>Not signed in</div>
+          <button onClick={() => window.api.startLogin?.()}>Sign in with Spotify</button>
+        </div>
+      </div>
+    );
+  }
+
+  // Authenticated: render main UI
   return (
     <div
     style={{
       ...container,
       //opacity: isHovered ? 0.4 : 0.85,
+      opacity: focusMode ? 0.3 : 1,
       transition: "opacity 0.15s ease"
     }}
     >
-      <div style={{...lyricsContainer, backgroundImage: bg || undefined, backgroundColor: !bg ? accent : undefined}}>
+      <div style={{
+          ...lyricsContainer,
+          backgroundImage: bg || undefined,
+          backgroundColor: !bg ? accent : undefined,
+          pointerEvents: focusMode ? 'none' : 'auto'
+        }}>
         <img style={coverImage} src={coverUrl}></img>
         {renderLyrics()}
       </div>
-      <div style={{...songBar}}>
+      <div style={songBar}>
         <div style={{...songTitleContainer, color: isColorDark(accent) ? lightenColor(accent): accent}}>{displaySong}</div>
         <div style={artistNameContainer}>{displayArtist}</div>
+        <button className={focusMode ? "pressed iconButton" : "iconButton"} onClick={toggleFocusMode}>Focus</button>
+        <button className="iconButton" onClick={logOut}>Log Out</button>
       </div>
     </div>
   );
@@ -131,7 +205,8 @@ const lyricsContainer: React.CSSProperties = {
   paddingTop: 20,
   overflow: 'hidden',
   // Padding is taken into consideration for width calculation (child can have 100% width and not go over padding zone)
-  boxSizing: 'border-box'
+  boxSizing: 'border-box',
+  pointerEvents: 'inherit'
 };
 
 const plainLyrics: React.CSSProperties = {
@@ -142,10 +217,12 @@ const plainLyrics: React.CSSProperties = {
   whiteSpace: 'pre-wrap',
   lineHeight: 2,
   fontSize: '25px',
-  color: colors.text.primary,
   textShadow: '0 2px 8px rgba(0,0,0,0.5)',
   overflowY: 'auto',
   fontWeight: 800,
+  pointerEvents: 'inherit',
+  userSelect: 'none',
+  transition: "color 0.15s ease"
 }
 
 const coverImage: React.CSSProperties = {

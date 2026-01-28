@@ -18,14 +18,15 @@ export class SpotifyAuth {
         "user-read-currently-playing"
     ];
     private app = express();
-    private playbackEvents = new PlaybackEvents();
+    public playbackEvents = new PlaybackEvents();
+    public stopPolling: (() => void) | null = null;
 
     constructor(mainWindow: BrowserWindow) {
         this.setupCallbackRoute();
         this.playbackEvents.setMainWindow(mainWindow);
     }
 
-    private async openAuthUrl() {
+    public async openAuthUrl() {
         try {
             const authUrl =
                 `https://accounts.spotify.com/authorize` +
@@ -71,7 +72,7 @@ export class SpotifyAuth {
 
                 res.send("Spotify authorization successful! You can close this tab.");
                 
-                startPolling(this.playbackEvents, 1000);
+                this.stopPolling = startPolling(this.playbackEvents, 1000);
 
             } catch (err) {
                 console.error(err);
@@ -101,9 +102,10 @@ export class SpotifyAuth {
         return response.data.access_token;
     }
 
-    public async loginIfNeeded() {
+    public async refreshLogin() {
+        
         const refreshToken = await getRefreshToken();
-
+        
         if (refreshToken) {
             console.log("Found refresh token, refreshing access token...");
 
@@ -111,14 +113,14 @@ export class SpotifyAuth {
                 const accessToken = await this.refreshAccessToken(refreshToken);
                 setAccessToken(accessToken);
 
-                startPolling(this.playbackEvents, 1000);
-                return;
+                this.stopPolling = startPolling(this.playbackEvents, 1000);
+                return true;
             } catch (err) {
                 console.error("Refresh failed, forcing re-login");
             }
         }
 
-        // No refresh token or refresh failed
-        await this.openAuthUrl();
+        return false;
+
     }
 }

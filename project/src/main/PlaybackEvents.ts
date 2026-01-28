@@ -5,7 +5,7 @@ import { LyricsResult, LyricsService } from './LyricsService.js';
 
 export class PlaybackEvents extends EventEmitter {
     private mainWindow: BrowserWindow | null = null;
-    private firstPlayback: boolean = true;
+    public firstPlayback: boolean = true;
 
     constructor(mainWindow?: BrowserWindow) {
         super();

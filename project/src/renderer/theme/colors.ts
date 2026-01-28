@@ -1,6 +1,7 @@
 import ColorThief from "colorthief";
 
 export async function getAccentColor(imageUrl: string) {
+    if (imageUrl == '') { return hexToRGB(colors.primary.spotify) }
     return new Promise<string>((resolve) => {
         const img = new Image();
         img.crossOrigin = "anonymous";

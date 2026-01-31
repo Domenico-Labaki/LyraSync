@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { PlaybackWithLyrics } from '../main/PlaybackState';
 import { getAccentColor, soften, isColorDark, lightenColor, hexToRGB, colors } from './theme/colors';
+import {SyncedLyrics} from './components/SyncedLyrics';
 
 declare global {
   interface Window {
@@ -85,17 +86,21 @@ export default function App() {
   }, []);
 
   function renderLyrics() {
-    if (!playbackState?.lyrics) {
+    if (!playbackState) {
+      return <div>Loading...</div>;
+    }
+    if (!playbackState.lyrics) {
       return <div>Lyrics unavailable for this song</div>;
     }
 
-    // if (playbackState.lyrics.synced) {
-    //   return(
-    //     <div>
-    //       Synced lyrics are available
-    //     </div>
-    //   );
-    // }
+    if (playbackState.lyrics.synced) {
+      return(
+        <SyncedLyrics
+          lyricsRaw={playbackState.lyrics.synced}
+          progressMs={playbackState.progressMs}
+        />
+      );
+    }
 
     if (playbackState.lyrics.plain) {
       return (
@@ -160,7 +165,7 @@ export default function App() {
     style={{
       ...container,
       //opacity: isHovered ? 0.4 : 0.85,
-      opacity: focusMode ? 0.3 : 1,
+      opacity: focusMode ? 0.5 : 1,
       transition: "opacity 0.15s ease"
     }}
     >
@@ -170,7 +175,7 @@ export default function App() {
           backgroundColor: !bg ? accent : undefined,
           pointerEvents: focusMode ? 'none' : 'auto'
         }}>
-        <img style={coverImage} src={coverUrl}></img>
+        <img style={{...coverImage, borderColor: isColorDark(accent) ? lightenColor(accent): accent}} src={coverUrl}></img>
         {renderLyrics()}
       </div>
       <div style={songBar}>
@@ -201,7 +206,7 @@ const lyricsContainer: React.CSSProperties = {
   borderTopLeftRadius: 8,
   borderTopRightRadius: 8,
   paddingLeft: 20,
-  paddingRight: 20,
+  paddingRight: 30,
   paddingTop: 20,
   overflow: 'hidden',
   // Padding is taken into consideration for width calculation (child can have 100% width and not go over padding zone)
@@ -226,14 +231,18 @@ const plainLyrics: React.CSSProperties = {
 }
 
 const coverImage: React.CSSProperties = {
-  position: 'absolute',
+  position: 'fixed',
   inset: 0,
-  height: '100%',
-  zIndex: 0,
+  height: '90%',
+  zIndex: 1,
   filter: 'blur(3px)',
+  borderTopLeftRadius: 8,
+  padding: '2px',
+  borderWidth: '2px',
+  borderStyle: 'solid',
   maskImage: 'linear-gradient(to right, black 30%, transparent 100%)',
   opacity: 0.5,
-  pointerEvents: 'none'
+  pointerEvents: 'none',
 };
 
 const songBar: React.CSSProperties = {

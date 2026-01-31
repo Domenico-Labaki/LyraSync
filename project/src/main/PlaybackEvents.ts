@@ -6,6 +6,8 @@ import { LyricsResult, LyricsService } from './LyricsService.js';
 export class PlaybackEvents extends EventEmitter {
     private mainWindow: BrowserWindow | null = null;
     public firstPlayback: boolean = true;
+    private lastLyrics: LyricsResult | null = null;
+    private lastTrackId: string | null = null;
 
     constructor(mainWindow?: BrowserWindow) {
         super();
@@ -23,7 +25,7 @@ export class PlaybackEvents extends EventEmitter {
                 trackId: state.trackId,
                 trackName: state.trackName,
                 artist: state.artist,
-                progressms: state.progressMs,
+                progressMs: state.progressMs,
                 durationMs: state.durationMs,
                 isPlaying: state.isPlaying,
                 imgUrl: state.imgUrl,
@@ -42,6 +44,8 @@ export class PlaybackEvents extends EventEmitter {
                 state.trackName
             );
 
+            this.lastLyrics = lyrics;
+            this.lastTrackId = state.trackId;
             this.sendToRenderer(state, lyrics);
         });
 
@@ -61,6 +65,8 @@ export class PlaybackEvents extends EventEmitter {
                     state.trackName
                 );
 
+                this.lastLyrics = lyrics;
+                this.lastTrackId = state.trackId;
                 this.sendToRenderer(state, lyrics);
                 this.firstPlayback = false;
 
@@ -71,7 +77,9 @@ export class PlaybackEvents extends EventEmitter {
 
         this.on('progressUpdated', (state: PlaybackState) => {
             console.log('Progress updated:', state.progressMs, 'ms');
-            this.sendToRenderer(state);
+            // If track changed, reset lyrics; otherwise send with last lyrics
+            const lyrics = state.trackId !== this.lastTrackId ? null : this.lastLyrics;
+            this.sendToRenderer(state, lyrics);
         });
     }
 }

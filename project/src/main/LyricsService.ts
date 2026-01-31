@@ -8,10 +8,11 @@ export type LyricsResult = {
 
 export class LyricsService {
   static async getLyrics(artist: string, title: string): Promise<LyricsResult | null> {
+
     // LRCLIB as main provider
     const lrclib = await this.fromLrclib(artist, title);
     if (lrclib) return lrclib;
-
+    
     // Fallback to lyrics.ovh
     const ovh = await this.fromOvh(artist, title);
     if (ovh) return ovh;

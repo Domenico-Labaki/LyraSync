@@ -43,3 +43,20 @@ button.pressed, button:active {
   color: #212121;
   background-color: #1DB954;
 }
+
+.lyric-line {
+  font-size: 25px;
+  line-height: 2;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  color: #B3B3B3;
+  transition: all 0.3s ease;
+  font-weight: 800;
+  user-select: none;
+}
+
+.lyric-line.active {
+  color: white;
+  transform-origin: left center;
+  transform: scale(1.05);
+  font-weight: 800;
+}

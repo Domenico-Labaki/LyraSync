@@ -3,7 +3,7 @@ import axios from "axios";
 export type LyricsResult = {
   plain: string;
   synced?: string; // LRC format
-  source: "lrclib" | "lyrics.ovh";
+  source: "lrclib" | "lyrics.ovh" | null;
 };
 
 export class LyricsService {
@@ -17,7 +17,10 @@ export class LyricsService {
     const ovh = await this.fromOvh(artist, title);
     if (ovh) return ovh;
 
-    return null;
+    return {
+      plain: 'No lyrics found',
+      source: null
+    };
   }
 
   private static async fromLrclib(artist: string, title: string): Promise<LyricsResult | null> {

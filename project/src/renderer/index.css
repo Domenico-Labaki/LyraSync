@@ -28,11 +28,18 @@ body,
   background: rgba(255,255,255,0.45);
 }
 
+.dragBar{
+  -webkit-app-region: drag;
+}
+
 button {
   background-color: #212121;
   color: #1DB954;
   border: 2px solid #1DB954;
   border-radius: 5px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 button.iconButton {
@@ -60,3 +67,21 @@ button.pressed, button:active {
   transform: scale(1.05);
   font-weight: 800;
 }
+
+.loader {
+  width: 25px;
+  --b: 4px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #B3B3B3;
+  -webkit-mask:
+    repeating-conic-gradient(#0000 0deg,#000 1deg 70deg,#0000 71deg 90deg),
+    radial-gradient(farthest-side,#0000 calc(100% - var(--b) - 1px),#000 calc(100% - var(--b)));
+  mask:
+    repeating-conic-gradient(#0000 0deg,#000 1deg 70deg,#0000 71deg 90deg),
+    radial-gradient(farthest-side,#0000 calc(100% - var(--b) - 1px),#000 calc(100% - var(--b)));
+  -webkit-mask-composite: destination-in;
+          mask-composite: intersect;
+  animation: l5 1s infinite;
+}
+@keyframes l5 {to{transform: rotate(.5turn)}}

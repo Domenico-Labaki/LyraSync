@@ -9,6 +9,8 @@
     "start": "npm run build && electron ."
   },
   "dependencies": {
+    "@fortawesome/free-solid-svg-icons": "^7.1.0",
+    "@fortawesome/react-fontawesome": "^3.1.1",
     "@janishutz/colorthief": "^3.0.2",
     "axios": "^1.13.2",
     "colorthief": "^2.6.0",

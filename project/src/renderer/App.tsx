@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { PlaybackWithLyrics } from '../main/PlaybackState';
 import { getAccentColor, soften, isColorDark, lightenColor, hexToRGB, colors } from './theme/colors';
 import {SyncedLyrics} from './components/SyncedLyrics';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faEye, faArrowRightFromBracket } from '@fortawesome/free-solid-svg-icons'
 
 declare global {
   interface Window {
@@ -20,12 +22,16 @@ declare global {
 export default function App() {
   const [playbackState, setPlaybackState] = useState<PlaybackWithLyrics | null>(null);
   const [bg, setBg] = useState<string>('');
-  const [accent, setAccent] = useState(hexToRGB(colors.primary.spotify));
+  const [accent, setAccent] = useState(hexToRGB(colors.background.primary));
   const [oldTrackId, setOldTrackId] = useState<string | null>(null);
   const [coverUrl, setCoverUrl] = useState<string>('');
   const [focusMode, setFocusMode] = useState<boolean>(false);
   const [authStatus, setAuthStatus] = useState<boolean | null>(null); // null = checking
+  const [displayProgress, setDisplayProgress] = useState(0);
+  const lastSyncRef = useRef(0);
+  const baseProgressRef = useRef(0);
 
+  // Update playback state
   useEffect(() => {
     window.api.onPlaybackStateChanged((state) => {
       if (!state) {
@@ -58,6 +64,9 @@ export default function App() {
   // Update cover URL when track changes
   useEffect(() => {
     if (!oldTrackId || playbackState?.trackId !== oldTrackId) {
+      // Clear lyrics when track changes
+      setPlaybackState(prev => prev ? { ...prev, lyrics: null } : null);
+
       if (plainLyricsRef.current) { // There currently exists plain lyrics container
         plainLyricsRef.current.scrollTop = 0;
       }
@@ -79,6 +88,29 @@ export default function App() {
     }
   }, [coverUrl]);
 
+  // Update progress
+  useEffect(() => {
+    if (playbackState?.progressMs != null) {
+      baseProgressRef.current = playbackState.progressMs;
+      lastSyncRef.current = Date.now();
+    }
+  }, [playbackState?.progressMs]);
+
+  useEffect(() => {
+    let raf: number;
+
+    const loop = () => {
+      const now = Date.now();
+      const delta = now - lastSyncRef.current;
+      setDisplayProgress(baseProgressRef.current + delta);
+      raf = requestAnimationFrame(loop);
+    };
+
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // Hover states
   const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
@@ -87,17 +119,17 @@ export default function App() {
 
   function renderLyrics() {
     if (!playbackState) {
-      return <div>Loading...</div>;
+      return <div className="loader"></div>;
     }
     if (!playbackState.lyrics) {
-      return <div>Lyrics unavailable for this song</div>;
+      return <div className="loader"></div>;
     }
 
     if (playbackState.lyrics.synced) {
       return(
         <SyncedLyrics
           lyricsRaw={playbackState.lyrics.synced}
-          progressMs={playbackState.progressMs}
+          progressMs={displayProgress}
         />
       );
     }
@@ -110,7 +142,7 @@ export default function App() {
       );
     }
 
-    return <div>Lyrics unavailable for this song</div>;
+    return <div className="loader"></div>;
   }
 
   function toggleFocusMode() {
@@ -120,6 +152,10 @@ export default function App() {
   }
 
   function logOut() {
+    // Make sure window is focused again
+    setFocusMode(false);
+    window.api.setFocusMode?.(false);
+
     // Notify main process to clear stored tokens
     window.api.logout?.();
 
@@ -178,18 +214,22 @@ export default function App() {
         <img style={{...coverImage, borderColor: isColorDark(accent) ? lightenColor(accent): accent}} src={coverUrl}></img>
         {renderLyrics()}
       </div>
-      <div style={songBar}>
+      <div className="dragBar" style={songBar}>
         <div style={{...songTitleContainer, color: isColorDark(accent) ? lightenColor(accent): accent}}>{displaySong}</div>
         <div style={artistNameContainer}>{displayArtist}</div>
-        <button className={focusMode ? "pressed iconButton" : "iconButton"} onClick={toggleFocusMode}>Focus</button>
-        <button className="iconButton" onClick={logOut}>Log Out</button>
+        <button className={focusMode ? "pressed iconButton" : "iconButton"} onClick={toggleFocusMode} aria-label="Toggle focus">
+          <FontAwesomeIcon icon={faEye} />
+        </button>
+        <button className="iconButton" onClick={logOut} aria-label="Log out">
+          <FontAwesomeIcon icon={faArrowRightFromBracket} />
+        </button>
       </div>
     </div>
   );
 }
 
 const container: React.CSSProperties = {
-  width: '100vw',
+  width: '100%',
   height: '100vh',
   maxWidth: '100%',
   background: 'transparent',
@@ -202,7 +242,7 @@ const container: React.CSSProperties = {
 const lyricsContainer: React.CSSProperties = {
   position: 'relative',
   width: '100%',
-  height: '90%',
+  height: '88%',
   borderTopLeftRadius: 8,
   borderTopRightRadius: 8,
   paddingLeft: 20,
@@ -233,13 +273,13 @@ const plainLyrics: React.CSSProperties = {
 const coverImage: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
-  height: '90%',
+  height: '88%',
   zIndex: 1,
   filter: 'blur(3px)',
   borderTopLeftRadius: 8,
-  padding: '2px',
-  borderWidth: '2px',
-  borderStyle: 'solid',
+  // padding: '2px',
+  // borderWidth: '2px',
+  // borderStyle: 'solid',
   maskImage: 'linear-gradient(to right, black 30%, transparent 100%)',
   opacity: 0.5,
   pointerEvents: 'none',
@@ -248,25 +288,28 @@ const coverImage: React.CSSProperties = {
 const songBar: React.CSSProperties = {
   width: '100%',
   height: '10%',
+  boxSizing: 'border-box',
   backgroundColor: colors.background.secondary,
   display: 'flex',
   flexDirection: 'row',
   alignItems: 'center',
   borderBottomLeftRadius: 8,
   borderBottomRightRadius: 8,
-  userSelect: 'none'
+  userSelect: 'none',
+  paddingRight: 10,
+  paddingLeft: 10,
+  
 };
 
 const songTitleContainer: React.CSSProperties = {
   color: colors.text.accent,
   fontSize: '15px',
-  paddingLeft: 10,
-  paddingRight: 5
+  paddingRight: 10
 };
 
 const artistNameContainer: React.CSSProperties = {
   color: colors.text.primary,
   fontSize: '15px',
-  paddingLeft: 5,
-  paddingRight: 5
+  paddingRight: 5,
+  flex: 1
 };

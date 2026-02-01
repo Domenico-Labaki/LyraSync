@@ -36,6 +36,7 @@ export class PlaybackEvents extends EventEmitter {
 
     private async attachDefaultListeners() {
         this.on('trackChanged', async (state: PlaybackState) => {
+            
             console.log('Track changed:', state.trackName, 'by', state.artist);
 
             // Fetch new lyrics

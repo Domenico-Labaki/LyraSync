@@ -38,8 +38,6 @@ export class PlaybackState {
 
     get imgUrl(): string | null {return this.dto.imgUrl; }
 
-    get progressRatio(): number { return this.dto.progressMs / this.dto.durationMs; }
-
     // Comparison methods
     public hasTrackChanged(other: PlaybackState): boolean {
         return this.trackId != other.trackId;

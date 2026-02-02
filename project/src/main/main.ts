@@ -33,28 +33,29 @@ function createWindow() {
 
   // Check cursor position ~60fps and toggle mouse event passthrough
   setInterval(() => {
-    const cursor = screen.getCursorScreenPoint();
-    const bounds = win.getBounds();
+    if (win && !win.isDestroyed()) {
+      const cursor = screen.getCursorScreenPoint();
+      const bounds = win.getBounds();
 
-    const inside =
-      cursor.x >= bounds.x &&
-      cursor.x <= bounds.x + bounds.width &&
-      cursor.y >= bounds.y &&
-      cursor.y <= bounds.y + bounds.height;
+      const inside =
+        cursor.x >= bounds.x &&
+        cursor.x <= bounds.x + bounds.width &&
+        cursor.y >= bounds.y &&
+        cursor.y <= bounds.y + bounds.height;
 
-    const relY = cursor.y - bounds.y;
-    const inLyrics = inside && relY < bounds.height * 0.9; // top 90% is lyricsContainer
-    const inSongBar = inside && relY >= bounds.height * 0.9; // bottom 10% is songBar
+      const relY = cursor.y - bounds.y;
+      const inLyrics = inside && relY < bounds.height * 0.9; // top 90% is lyricsContainer
+      const inSongBar = inside && relY >= bounds.height * 0.9; // bottom 10% is songBar
 
-    if (inLyrics && focusMode && !isIgnoringMouse) {
-      isIgnoringMouse = true;
-      win.setIgnoreMouseEvents(true, { forward: true });
-    } else if ((inSongBar || !inside || !focusMode) && isIgnoringMouse) {
-      isIgnoringMouse = false;
-      win.setIgnoreMouseEvents(false);
+      if (inLyrics && focusMode && !isIgnoringMouse) {
+        isIgnoringMouse = true;
+        win.setIgnoreMouseEvents(true, { forward: true });
+      } else if ((inSongBar || !inside || !focusMode) && isIgnoringMouse) {
+        isIgnoringMouse = false;
+        win.setIgnoreMouseEvents(false);
+      }
+      win.webContents.send("hover-state", inside);
     }
-
-    win.webContents.send("hover-state", inside);
   }, 16); // ~60fps
 
   if (process.env.NODE_ENV === "development") {
@@ -88,8 +89,10 @@ function createWindow() {
       clearToken();
       await clearCachedToken();
       // Inform renderer to clear UI and show login screen
-      win.webContents.send('playback-state-changed', null);
-      win.webContents.send('auth-status', false);
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('playback-state-changed', null);
+        win.webContents.send('auth-status', false);
+      }
     } catch (err) {
       console.error('Logout failed:', err);
     }
@@ -101,9 +104,13 @@ function createWindow() {
   // Ensure renderer listener is registered before sending auth status
   ipcMain.on('renderer-ready', () => {
     auth.refreshLogin().then((success) => {
-      win.webContents.send('auth-status', success);
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('auth-status', success);
+      }
     }).catch(() => {
-      win.webContents.send('auth-status', false);
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('auth-status', false);
+      }
     });
   });
 

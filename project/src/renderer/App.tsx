@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { PlaybackWithLyrics } from '../main/PlaybackState';
 import { getAccentColor, soften, isColorDark, lightenColor, hexToRGB, colors } from './theme/colors';
-import {SyncedLyrics} from './components/SyncedLyrics';
+import { SyncedLyrics } from './components/SyncedLyrics';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faEye, faArrowRightFromBracket } from '@fortawesome/free-solid-svg-icons'
-import ScrollingText from './components/ScrollingText';
+import { faEye, faArrowRightFromBracket, faClose } from '@fortawesome/free-solid-svg-icons'
+import { ScrollingText } from './components/ScrollingText';
+import brandLogo from '../imgs/logo.png';
 
 declare global {
   interface Window {
@@ -169,6 +170,11 @@ export default function App() {
     setFocusMode(false);
   }
 
+  // Exit the Electron window
+  function exit() {
+    window.close();
+  }
+
   useEffect(() => {
     // Ensure main process knows the initial focusMode
     window.api.setFocusMode?.(focusMode);
@@ -177,7 +183,7 @@ export default function App() {
   // Auth UI: show loader / login button if not authenticated
   if (authStatus === null) {
     return (
-      <div style={{...container, backgroundColor: colors.background.primary, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+      <div style={{...container, backgroundColor: '#1B1C1F', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
         <div style={{color: colors.text.primary}}>Loading session...</div>
       </div>
     );
@@ -185,8 +191,9 @@ export default function App() {
 
   if (authStatus === false) {
     return (
-      <div style={{...container, backgroundColor: colors.background.primary, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+      <div style={{...container, backgroundColor: '#1B1C1F', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
         <div style={{textAlign: 'center'}}>
+          <img src={brandLogo} width="125px"></img>
           <div style={{color: colors.text.primary, marginBottom: 12}}>Not signed in</div>
           <button onClick={() => window.api.startLogin?.()}>Sign in with Spotify</button>
         </div>
@@ -200,17 +207,17 @@ export default function App() {
     style={{
       ...container,
       //opacity: isHovered ? 0.4 : 0.85,
-      opacity: focusMode ? 0.5 : 1,
+      opacity: focusMode ? 0.75 : 1,
       transition: "opacity 0.15s ease"
     }}
     >
       <div style={{
           ...lyricsContainer,
-          backgroundImage: bg || undefined,
-          backgroundColor: !bg ? accent : undefined,
+          backgroundImage: focusMode ? undefined : (bg || undefined),
+          backgroundColor: focusMode ? undefined : (!bg ? accent : undefined),
           pointerEvents: focusMode ? 'none' : 'auto'
         }}>
-        <img style={{...coverImage, borderColor: isColorDark(accent) ? lightenColor(accent): accent}} src={coverUrl}></img>
+        <img style={{...coverImage, visibility: focusMode ? 'hidden' : 'visible', borderColor: isColorDark(accent) ? lightenColor(accent): accent}} src={coverUrl}></img>
         {renderLyrics()}
       </div>
       <div className="dragBar" style={songBar}>
@@ -225,6 +232,9 @@ export default function App() {
         </button>
         <button className="iconButton" onClick={logOut} aria-label="Log out">
           <FontAwesomeIcon icon={faArrowRightFromBracket} />
+        </button>
+        <button className="iconButton" onClick={exit} aria-label="Exit">
+          <FontAwesomeIcon icon={faClose} />
         </button>
       </div>
     </div>

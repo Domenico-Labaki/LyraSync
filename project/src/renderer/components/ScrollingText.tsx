@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-export default function ScrollingText({ text }: { text: string }) {
+export function ScrollingText({ text }: { text: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
 

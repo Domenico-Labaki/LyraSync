@@ -1,14 +1,34 @@
-import dotenv from 'dotenv';
+import { config } from 'dotenv';
+import path from 'path';
+import { existsSync } from 'fs';
 import { BrowserWindow } from 'electron';
-dotenv.config();
-
-import { shell } from 'electron';
+import { app, shell } from 'electron';
 import express from 'express';
 import axios from 'axios';
 import { startPolling } from './Poller.js';
 import { PlaybackEvents } from './PlaybackEvents.js';
 import { setAccessToken, setRefreshToken, getRefreshToken } from './TokenStore.js';
 
+// Load env variables
+let envPath: string;
+
+if (process.env.NODE_ENV === 'production') {
+  // Production: extraResource copied to resources folder
+  envPath = path.join(process.resourcesPath, '.env');
+} else {
+  // Development: point to project root
+  // Use Electron's app.getAppPath() to always get project root
+  envPath = path.join(app.getAppPath(), '.env');
+}
+
+if (existsSync(envPath)) {
+  config({ path: envPath });
+  console.log(`Loaded .env from: ${envPath}`);
+} else {
+  console.warn(`.env not found at: ${envPath}`);
+}
+
+// SpotifyAuth class
 export class SpotifyAuth {
     private clientId = process.env.SPOTIFY_CLIENT_ID!;
     private clientSecret = process.env.SPOTIFY_CLIENT_SECRET!;

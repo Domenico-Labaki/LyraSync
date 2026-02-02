@@ -4,6 +4,11 @@ const { FuseV1Options, FuseVersion } = require('@electron/fuses');
 module.exports = {
   packagerConfig: {
     asar: true,
+    icon: './src/imgs/icon',
+    appBundleId: "com.domenicolabaki.lyrasync",
+    extraResource: [
+      './.env',
+    ]
   },
   rebuildConfig: {},
   makers: [

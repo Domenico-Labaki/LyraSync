@@ -30,7 +30,7 @@ export default function App() {
   const [focusMode, setFocusMode] = useState<boolean>(false);
   const [authStatus, setAuthStatus] = useState<boolean | null>(null); // null = checking
   const [displayProgress, setDisplayProgress] = useState(0);
-  const lastSyncRef = useRef(0);
+  const [lastSync, setLastSync] = useState(0);
   const baseProgressRef = useRef(0);
 
   // Update playback state
@@ -93,8 +93,7 @@ export default function App() {
   // Update progress
   useEffect(() => {
     if (playbackState?.progressMs != null) {
-      baseProgressRef.current = playbackState.progressMs;
-      lastSyncRef.current = Date.now();
+      setLastSync(Date.now());
     }
   }, [playbackState?.progressMs]);
   
@@ -102,13 +101,13 @@ export default function App() {
     let raf: number;
     const loop = () => {
       const now = Date.now();
-      const delta = playbackState?.isPlaying ? now - lastSyncRef.current : 0;
-      setDisplayProgress(baseProgressRef.current + delta);
+      const delta = playbackState?.isPlaying ? now - lastSync : 0;
+      setDisplayProgress((playbackState?.progressMs ? playbackState.progressMs : 0) + delta);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [playbackState?.progressMs, playbackState?.isPlaying, lastSync]);
 
   // Hover states
   const [isHovered, setIsHovered] = useState(false);
@@ -152,10 +151,6 @@ export default function App() {
   }
 
   function logOut() {
-    // Make sure window is focused again
-    setFocusMode(false);
-    window.api.setFocusMode?.(false);
-
     // Notify main process to clear stored tokens
     window.api.logout?.();
 
@@ -183,7 +178,7 @@ export default function App() {
   // Auth UI: show loader / login button if not authenticated
   if (authStatus === null) {
     return (
-      <div style={{...container, backgroundColor: '#1B1C1F', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+      <div className="dragBar" style={{...container, backgroundColor: '#1B1C1F', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
         <div style={{color: colors.text.primary}}>Loading session...</div>
       </div>
     );
@@ -191,12 +186,13 @@ export default function App() {
 
   if (authStatus === false) {
     return (
-      <div style={{...container, backgroundColor: '#1B1C1F', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+      <div className="dragBar" style={{...container, backgroundColor: '#1B1C1F', display: 'flex', alignItems: 'center', justifyContent: 'space-around', paddingTop: '10px', paddingBottom: '10px'}}>
         <div style={{textAlign: 'center'}}>
           <img src={brandLogo} width="125px"></img>
-          <div style={{color: colors.text.primary, marginBottom: 12}}>Not signed in</div>
+          <div style={{color: colors.text.primary, marginBottom: 12, marginTop: 25}}>Not signed in</div>
           <button onClick={() => window.api.startLogin?.()}>Sign in with Spotify</button>
         </div>
+        <div style={{color: colors.text.primary, fontSize: '12px'}}>© 2026 Domenico Labaki</div>
       </div>
     );
   }
@@ -214,7 +210,7 @@ export default function App() {
       <div style={{
           ...lyricsContainer,
           backgroundImage: focusMode ? undefined : (bg || undefined),
-          backgroundColor: focusMode ? undefined : (!bg ? accent : undefined),
+          backgroundColor: focusMode ? undefined: (!bg ? accent : undefined),
           pointerEvents: focusMode ? 'none' : 'auto'
         }}>
         <img style={{...coverImage, visibility: focusMode ? 'hidden' : 'visible', borderColor: isColorDark(accent) ? lightenColor(accent): accent}} src={coverUrl}></img>
@@ -230,7 +226,7 @@ export default function App() {
         <button className={focusMode ? "pressed iconButton" : "iconButton"} onClick={toggleFocusMode} aria-label="Toggle focus">
           <FontAwesomeIcon icon={faEye} />
         </button>
-        <button className="iconButton" onClick={logOut} aria-label="Log out">
+        <button className="iconButton" style={{pointerEvents: focusMode ? 'none' : 'auto', opacity: focusMode ? 0.5 : 1}} onClick={logOut} aria-label="Log out">
           <FontAwesomeIcon icon={faArrowRightFromBracket} />
         </button>
         <button className="iconButton" onClick={exit} aria-label="Exit">

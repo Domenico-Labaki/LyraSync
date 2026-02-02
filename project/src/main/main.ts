@@ -1,7 +1,7 @@
 import { app, BrowserWindow, screen, ipcMain } from "electron";
 import path from "path";
 import { SpotifyAuth } from "./SpotifyAuth.js";
-import { clearToken, clearCachedToken, getRefreshToken } from "./TokenStore.js";
+import { clearToken, clearCachedToken } from "./TokenStore.js";
 
 let win: BrowserWindow;
 export var auth: SpotifyAuth;
@@ -10,6 +10,8 @@ function createWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
   
+  const iconPath = path.join(__dirname, '../imgs/icon.ico');
+
   win = new BrowserWindow({
     width: 500,
     height: 300,
@@ -22,7 +24,9 @@ function createWindow() {
     hasShadow: false,
     webPreferences: {
       preload: path.join(__dirname, "../preload/preload.js")
-    }
+    },
+    title: "LyraSync",
+    icon: iconPath,
   });
 
   win.setIgnoreMouseEvents(false);
@@ -97,7 +101,7 @@ function createWindow() {
       console.error('Logout failed:', err);
     }
   });
-  
+
   auth = new SpotifyAuth(win);
   auth.start();
 

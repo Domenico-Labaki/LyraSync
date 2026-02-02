@@ -11,6 +11,8 @@
     "make": "electron-forge make"
   },
   "dependencies": {
+    "@electron-forge/plugin-vite": "^7.11.1",
+    "@electron-forge/plugin-webpack": "^7.11.1",
     "@fortawesome/free-solid-svg-icons": "^7.1.0",
     "@fortawesome/react-fontawesome": "^3.1.1",
     "@janishutz/colorthief": "^3.0.2",
@@ -38,8 +40,10 @@
     "@types/node": "^25.0.3",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "@vercel/webpack-asset-relocator-loader": "^1.10.0",
     "@vitejs/plugin-react": "^5.1.2",
     "electron": "^30.0.0",
+    "ts-loader": "^9.5.4",
     "typescript": "^5.9.3",
     "vite": "^7.3.0"
   }

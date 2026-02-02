@@ -40,6 +40,7 @@ button {
   display: flex;
   justify-content: center;
   align-items: center;
+  -webkit-app-region: no-drag;
 }
 
 button.iconButton {
@@ -85,3 +86,15 @@ button.pressed, button:active {
   animation: l5 1s infinite;
 }
 @keyframes l5 {to{transform: rotate(.5turn)}}
+
+.scroll-container {
+  max-width: '40%';
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.scroll-text {
+  font-size: 15px;
+  display: inline-block;
+  will-change: transform;
+}

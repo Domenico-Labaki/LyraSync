@@ -4,6 +4,7 @@ import { getAccentColor, soften, isColorDark, lightenColor, hexToRGB, colors } f
 import {SyncedLyrics} from './components/SyncedLyrics';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faEye, faArrowRightFromBracket } from '@fortawesome/free-solid-svg-icons'
+import ScrollingText from './components/ScrollingText';
 
 declare global {
   interface Window {
@@ -95,17 +96,15 @@ export default function App() {
       lastSyncRef.current = Date.now();
     }
   }, [playbackState?.progressMs]);
-
+  
   useEffect(() => {
     let raf: number;
-
     const loop = () => {
       const now = Date.now();
-      const delta = now - lastSyncRef.current;
+      const delta = playbackState?.isPlaying ? now - lastSyncRef.current : 0;
       setDisplayProgress(baseProgressRef.current + delta);
       raf = requestAnimationFrame(loop);
     };
-
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []);
@@ -215,8 +214,12 @@ export default function App() {
         {renderLyrics()}
       </div>
       <div className="dragBar" style={songBar}>
-        <div style={{...songTitleContainer, color: isColorDark(accent) ? lightenColor(accent): accent}}>{displaySong}</div>
-        <div style={artistNameContainer}>{displayArtist}</div>
+        <div style={{...songTitleContainer, color: isColorDark(accent) ? lightenColor(accent): accent}}>
+          <ScrollingText text={displaySong} />
+        </div>
+        <div style={artistNameContainer}>
+          <ScrollingText text={displayArtist} />
+        </div>
         <button className={focusMode ? "pressed iconButton" : "iconButton"} onClick={toggleFocusMode} aria-label="Toggle focus">
           <FontAwesomeIcon icon={faEye} />
         </button>
@@ -297,19 +300,23 @@ const songBar: React.CSSProperties = {
   borderBottomRightRadius: 8,
   userSelect: 'none',
   paddingRight: 10,
-  paddingLeft: 10,
-  
+  paddingLeft: 10
 };
 
 const songTitleContainer: React.CSSProperties = {
   color: colors.text.accent,
   fontSize: '15px',
-  paddingRight: 10
+  paddingRight: 10,
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  maxWidth: '60%',
 };
 
 const artistNameContainer: React.CSSProperties = {
   color: colors.text.primary,
   fontSize: '15px',
   paddingRight: 5,
-  flex: 1
+  flex: 1,
+  whiteSpace: 'nowrap',
+  overflow: 'hidden'
 };

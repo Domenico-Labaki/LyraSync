@@ -2,6 +2,8 @@
   "name": "lyra-sync",
   "version": "1.0.0",
   "main": "dist/main/main.js",
+  "description": "Spotify lyrics popup that integrates with your work",
+  "author": "Domenico Labaki",
   "private": true,
   "scripts": {
     "dev": "vite",

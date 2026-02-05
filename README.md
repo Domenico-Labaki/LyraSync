@@ -73,6 +73,7 @@ Download the [latest stable release](https://github.com/Domenico-Labaki/LyraSync
 
 ## Architecture Overview
 
+```
 React Renderer
 │
 │ IPC
@@ -82,6 +83,7 @@ Electron Main Process
 │ OAuth callbacks
 ▼
 Local Express Server
+```
 
 This architecture allows LyraSync to behave like a native desktop application while maintaining a clean and secure separation of concerns.
 

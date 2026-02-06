@@ -54,14 +54,13 @@ Download the [latest stable release](https://github.com/Domenico-Labaki/LyraSync
 
 - React
 - TypeScript
-- Custom CSS (modern, minimal aesthetic)
+- CSS
 
 ### Desktop & Backend
 
 - Electron
 - Node.js
-- Express (local OAuth callback handling)
-- IPC for renderer ↔ main process communication
+- Express
 
 ### Tooling & Packaging
 

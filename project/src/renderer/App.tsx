@@ -211,7 +211,8 @@ export default function App() {
           ...lyricsContainer,
           backgroundImage: focusMode ? undefined : (bg || undefined),
           backgroundColor: focusMode ? undefined: (!bg ? accent : undefined),
-          pointerEvents: focusMode ? 'none' : 'auto'
+          pointerEvents: focusMode ? 'none' : 'auto',
+          WebkitTextStroke: focusMode ? '3px rgba(0,0,0,0.3)': '0px'
         }}>
         <img style={{...coverImage, visibility: focusMode ? 'hidden' : 'visible', borderColor: isColorDark(accent) ? lightenColor(accent): accent}} src={coverUrl}></img>
         {renderLyrics()}
@@ -260,7 +261,8 @@ const lyricsContainer: React.CSSProperties = {
   overflow: 'hidden',
   // Padding is taken into consideration for width calculation (child can have 100% width and not go over padding zone)
   boxSizing: 'border-box',
-  pointerEvents: 'inherit'
+  pointerEvents: 'inherit',
+  paintOrder: 'stroke fill'
 };
 
 const plainLyrics: React.CSSProperties = {

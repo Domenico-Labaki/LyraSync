@@ -1,10 +1,14 @@
 import { app, BrowserWindow, screen, ipcMain } from "electron";
 import path from "path";
-import { SpotifyAuth } from "./SpotifyAuth.js";
+import { MediaSourceManager, MediaSource } from "./MediaSourceManager.js";
 import { clearToken, clearCachedToken } from "./TokenStore.js";
+import { SpotifyAuth } from "./SpotifyAuth.js";
 
 let win: BrowserWindow;
-export var auth: SpotifyAuth;
+let mediaSourceManager: MediaSourceManager;
+
+// Keep auth for backward compatibility if needed
+export var auth: SpotifyAuth | null = null;
 
 function createWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
@@ -30,7 +34,6 @@ function createWindow() {
   });
 
   win.setIgnoreMouseEvents(false);
-  //win.setIgnoreMouseEvents(true, { forward: true });
 
   let isIgnoringMouse = false;
   let focusMode = false; // renderer-controlled: when true, allow passthrough in lyrics area
@@ -71,6 +74,10 @@ function createWindow() {
   }
 
   win.show();
+
+  // Initialize MediaSourceManager
+  mediaSourceManager = new MediaSourceManager(win);
+
   // Receive focusMode updates from renderer
   ipcMain.on('focus-mode', (_event, enabled: boolean) => {
     focusMode = !!enabled;
@@ -80,47 +87,84 @@ function createWindow() {
     }
   });
 
-  // Handle logout requests from renderer: clear stored tokens and stop polling
+  // Handle logout requests from renderer
   ipcMain.on('logout', async () => {
     try {
-      // Stop polling if active
-      if (auth.stopPolling) {
-        auth.stopPolling();
-        auth.stopPolling = null;
-      }
+      await mediaSourceManager.stopSource();
       
-      auth.playbackEvents.firstPlayback = true;
+      // Clear Spotify tokens if Spotify was the source
       clearToken();
       await clearCachedToken();
+
       // Inform renderer to clear UI and show login screen
       if (win && !win.isDestroyed()) {
         win.webContents.send('playback-state-changed', null);
-        win.webContents.send('auth-status', false);
+        win.webContents.send('auth-status', { authenticated: false, source: null });
       }
     } catch (err) {
       console.error('Logout failed:', err);
     }
   });
 
-  auth = new SpotifyAuth(win);
-  auth.start();
+  // Renderer ready: try to restore previous session
+  ipcMain.on('renderer-ready', async () => {
+    try {
+      // Try to restore Spotify session first
+      const spotifyAuth = new SpotifyAuth(win);
+      spotifyAuth.start();
+      const spotifySuccess = await spotifyAuth.refreshLogin();
 
-  // Ensure renderer listener is registered before sending auth status
-  ipcMain.on('renderer-ready', () => {
-    auth.refreshLogin().then((success) => {
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('auth-status', success);
+      if (spotifySuccess) {
+        auth = spotifyAuth;
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('auth-status', { authenticated: true, source: 'spotify' });
+        }
+        return;
       }
-    }).catch(() => {
+
+      // No previous session found
       if (win && !win.isDestroyed()) {
-        win.webContents.send('auth-status', false);
+        win.webContents.send('auth-status', { authenticated: false, source: null });
       }
-    });
+    } catch (err) {
+      console.error('Failed to restore session:', err);
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('auth-status', { authenticated: false, source: null });
+      }
+    }
   });
 
-  // Allow renderer to explicitly start login flow
-  ipcMain.on('start-login', () => {
-    auth.openAuthUrl();
+  // Start Spotify login flow
+  ipcMain.on('start-spotify-login', async () => {
+    try {
+      const success = await mediaSourceManager.startSource('spotify');
+      if (success) {
+        mediaSourceManager.initiateSpotifyLogin();
+      } else {
+        console.error('Failed to initialize Spotify source');
+      }
+    } catch (err) {
+      console.error('Spotify login error:', err);
+    }
+  });
+
+  // Start Guest Mode (OS media controls)
+  ipcMain.on('start-guest-mode', async () => {
+    try {
+      const success = await mediaSourceManager.startSource('guest');
+      if (success) {
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('auth-status', { authenticated: true, source: 'guest' });
+        }
+      } else {
+        console.error('Failed to initialize guest mode');
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('auth-status', { authenticated: false, source: null });
+        }
+      }
+    } catch (err) {
+      console.error('Guest mode error:', err);
+    }
   });
 }
 

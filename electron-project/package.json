@@ -24,6 +24,7 @@
     "electron-squirrel-startup": "^1.0.1",
     "express": "^5.2.1",
     "keytar": "^7.9.0",
+    "node-global-media-controls": "^2.3.2",
     "open": "^11.0.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"

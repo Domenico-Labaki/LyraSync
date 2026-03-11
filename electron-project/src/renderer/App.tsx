@@ -2,17 +2,25 @@ import React, { useEffect, useRef, useState } from 'react';
 import { PlaybackWithLyrics } from '../main/PlaybackState';
 import { getAccentColor, soften, isColorDark, lightenColor, hexToRGB, colors } from './theme/colors';
 import { SyncedLyrics } from './components/SyncedLyrics';
+import { LoginScreen } from './components/LoginScreen';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faEye, faArrowRightFromBracket, faClose } from '@fortawesome/free-solid-svg-icons'
 import { ScrollingText } from './components/ScrollingText';
 import brandLogo from '../imgs/logo.png';
+
+type AuthStatus = {
+  authenticated: boolean;
+  source: 'spotify' | 'guest' | null;
+};
 
 declare global {
   interface Window {
     api: {
       onPlaybackStateChanged: (callback: (state: PlaybackWithLyrics | null) => void) => void;
       onHoverChanged: (callback: (hovered: boolean) => void) => void;
-      onAuthStatus: (callback: (status: boolean) => void) => void;
+      onAuthStatus: (callback: (status: AuthStatus) => void) => void;
+      startSpotifyLogin: () => void;
+      startGuestMode: () => void;
       startLogin: () => void;
       rendererReady: () => void;
       setFocusMode: ((enabled: boolean) => void);
@@ -28,7 +36,7 @@ export default function App() {
   const [oldTrackId, setOldTrackId] = useState<string | null>(null);
   const [coverUrl, setCoverUrl] = useState<string>('');
   const [focusMode, setFocusMode] = useState<boolean>(false);
-  const [authStatus, setAuthStatus] = useState<boolean | null>(null); // null = checking
+  const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null); // null = checking
   const [displayProgress, setDisplayProgress] = useState(0);
   const [lastSync, setLastSync] = useState(0);
   const baseProgressRef = useRef(0);
@@ -38,7 +46,7 @@ export default function App() {
     window.api.onPlaybackStateChanged((state) => {
       if (!state) {
         setPlaybackState(null);
-        setAuthStatus(false);
+        setAuthStatus({ authenticated: false, source: null });
         return;
       }
 
@@ -47,11 +55,11 @@ export default function App() {
         ...state,
         lyrics: (state as any).lyrics ?? prev?.lyrics ?? null
       }));
-      setAuthStatus(true);
+      setAuthStatus(prev => prev ? { ...prev, authenticated: true } : prev);
     });
 
     window.api.rendererReady?.();
-    window.api.onAuthStatus?.((s) => setAuthStatus(!!s));
+    window.api.onAuthStatus?.((s) => setAuthStatus(s));
   }, []);
 
   const displaySong = playbackState
@@ -154,7 +162,7 @@ export default function App() {
     // Notify main process to clear stored tokens
     window.api.logout?.();
 
-    setAuthStatus(false);
+    setAuthStatus({ authenticated: false, source: null });
 
     // Clear UI and playback state
     setPlaybackState(null);
@@ -184,16 +192,12 @@ export default function App() {
     );
   }
 
-  if (authStatus === false) {
+  if (!authStatus.authenticated) {
     return (
-      <div className="dragBar" style={{...container, backgroundColor: '#1B1C1F', display: 'flex', alignItems: 'center', justifyContent: 'space-around', paddingTop: '10px', paddingBottom: '10px'}}>
-        <div style={{textAlign: 'center'}}>
-          <img src={brandLogo} width="125px"></img>
-          <div style={{color: colors.text.primary, marginBottom: 12, marginTop: 25}}>Not signed in</div>
-          <button onClick={() => window.api.startLogin?.()}>Sign in with Spotify</button>
-        </div>
-        <div style={{color: colors.text.primary, fontSize: '12px'}}>© 2026 Domenico Labaki</div>
-      </div>
+      <LoginScreen
+        onSpotifyLogin={() => window.api.startSpotifyLogin?.()}
+        onGuestMode={() => window.api.startGuestMode?.()}
+      />
     );
   }
 

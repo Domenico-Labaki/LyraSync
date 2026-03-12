@@ -1,38 +1,34 @@
 import { PlaybackEvents } from './PlaybackEvents.js';
 import { PlaybackState } from './PlaybackState.js';
-import { MediaSession, MediaSessionManager } from 'node-global-media-controls';
+import * as WindowsMediaControl from '@nodert-win11/windows.media.control';
 
 /**
  * OSMediaDetector handles playback detection from OS media controls
- * Works across Windows, macOS, and Linux using dbus on Linux
+ * Uses Windows Media Control API for Windows 11/10 media session tracking
  */
 export class OSMediaDetector {
-    private mediaSessionManager: MediaSessionManager | null = null;
+    private sessionManager: any = null;
     public playbackEvents = new PlaybackEvents();
     public stopPolling: (() => void) | null = null;
-    private lastSession: MediaSession | null = null;
+    private lastSessionId: string | null = null;
+    private lastState: PlaybackState | null = null;
     private initialized: boolean = false;
+    private pollInterval: NodeJS.Timeout | null = null;
 
     /**
      * Initialize the OS media controls detector
      */
     public async initialize(): Promise<boolean> {
         try {
-            this.mediaSessionManager = new MediaSessionManager({
-                serviceName: 'LyraSync'
-            });
+            // Get the global media control session manager
+            this.sessionManager = await WindowsMediaControl.GlobalSystemMediaTransportControlsSessionManager.requestAsync();
 
-            // Start listening for media session updates
-            this.mediaSessionManager.on('sessionOpened', (session) => {
-                console.log('Media session opened:', session.name || 'Unknown');
-            });
+            if (!this.sessionManager) {
+                console.error('Failed to get Windows Media Control session manager');
+                return false;
+            }
 
-            this.mediaSessionManager.on('sessionClosed', (session) => {
-                console.log('Media session closed:', session.name || 'Unknown');
-                if (this.lastSession?.id === session.id) {
-                    this.lastSession = null;
-                }
-            });
+            console.log('Windows Media Control initialized successfully');
 
             // Start polling for media session changes
             this.startMonitoring();
@@ -48,59 +44,66 @@ export class OSMediaDetector {
      * Start monitoring media session for playback changes
      */
     private startMonitoring(): void {
-        if (!this.mediaSessionManager) return;
+        if (!this.sessionManager) return;
 
-        const pollInterval = 1000; // 1 second
-        let lastState: PlaybackState | null = null;
+        const pollIntervalMs = 1000; // 1 second
         let shouldStop = false;
 
         const pollLoop = async () => {
             while (!shouldStop) {
                 try {
-                    if (!this.mediaSessionManager) return;
+                    if (!this.sessionManager) return;
 
-                    // Get the active media session
-                    const sessions = this.mediaSessionManager.getActiveSessions();
-                    if (sessions.length === 0) {
+                    // Get all active media sessions
+                    const sessions = this.sessionManager.getSessions();
+                    
+                    if (!sessions || sessions.length === 0) {
                         // No active sessions
-                        await new Promise(r => setTimeout(r, pollInterval));
+                        if (this.lastState) {
+                            this.lastState = null;
+                            this.lastSessionId = null;
+                        }
+                        await new Promise(r => setTimeout(r, pollIntervalMs));
                         continue;
                     }
 
-                    // Use the first active session (usually the current/primary player)
+                    // Get the first active/current session
                     const session = sessions[0];
-                    const playbackState = this.convertSessionToPlaybackState(session);
+                    const sessionId = session.sourceAppUserModelId || session.nativeDisplayName || 'unknown';
+                    const playbackState = await this.convertSessionToPlaybackState(session);
 
                     if (!playbackState) {
-                        await new Promise(r => setTimeout(r, pollInterval));
+                        await new Promise(r => setTimeout(r, pollIntervalMs));
                         continue;
                     }
 
-                    if (!lastState) {
+                    if (!this.lastState) {
                         // First detection
                         this.playbackEvents.emit('playbackResumed', playbackState);
                     } else {
                         // Check for changes
-                        if (playbackState.trackId !== lastState.trackId) {
+                        if (playbackState.trackId !== this.lastState.trackId) {
                             this.playbackEvents.emit('trackChanged', playbackState);
                         }
 
-                        if (playbackState.isPlaying !== lastState.isPlaying) {
+                        if (playbackState.isPlaying !== this.lastState.isPlaying) {
                             playbackState.isPlaying
                                 ? this.playbackEvents.emit('playbackResumed', playbackState)
                                 : this.playbackEvents.emit('playbackPaused', playbackState);
                         }
 
-                        this.playbackEvents.emit('progressUpdated', playbackState);
+                        if (playbackState.progressMs !== this.lastState.progressMs) {
+                            this.playbackEvents.emit('progressUpdated', playbackState);
+                        }
                     }
 
-                    lastState = playbackState;
-                    this.lastSession = session;
+                    this.lastState = playbackState;
+                    this.lastSessionId = sessionId;
 
-                    await new Promise(r => setTimeout(r, pollInterval));
+                    await new Promise(r => setTimeout(r, pollIntervalMs));
                 } catch (err) {
                     console.error('Error monitoring media session:', err);
-                    await new Promise(r => setTimeout(r, pollInterval));
+                    await new Promise(r => setTimeout(r, pollIntervalMs));
                 }
             }
         };
@@ -115,20 +118,28 @@ export class OSMediaDetector {
     }
 
     /**
-     * Convert MediaSession to PlaybackState
+     * Convert Windows Media Control session to PlaybackState
      */
-    private convertSessionToPlaybackState(session: MediaSession): PlaybackState | null {
+    private async convertSessionToPlaybackState(session: any): Promise<PlaybackState | null> {
         try {
-            const metadata = session.metadata;
-            if (!metadata) return null;
+            // Get metadata information
+            const mediaProperties = session.tryGetMediaPropertiesAsync();
+            if (!mediaProperties) return null;
 
-            const trackName = metadata.title || 'Unknown Track';
-            const artist = metadata.artist || 'Unknown Artist';
-            const duration = session.getMetadata()?.duration ?? 0;
-            const progress = session.getMetadata()?.position ?? 0;
+            const trackName = mediaProperties.title || 'Unknown Track';
+            const artist = mediaProperties.artist || 'Unknown Artist';
+            const duration = mediaProperties.subtitle ? parseInt(mediaProperties.subtitle) : 0;
+
+            // Get playback info
+            const playbackInfo = session.getPlaybackInfo();
+            const isPlaying = playbackInfo?.playbackStatus === 4; // 4 = Playing in Windows Media Control
+            const progress = playbackInfo?.controls?.position || 0;
 
             // Create a unique track ID from artist + title
             const trackId = `${artist}|${trackName}`.toLowerCase().replace(/\s+/g, '_');
+
+            // Try to get album art thumbnail
+            const thumbnail = mediaProperties.thumbnail || null;
 
             return new PlaybackState({
                 trackId: trackId,
@@ -136,8 +147,8 @@ export class OSMediaDetector {
                 artist: artist,
                 progressMs: progress,
                 durationMs: duration,
-                isPlaying: session.getPlaybackStatus() === 'playing',
-                imgUrl: metadata.thumbnail || null
+                isPlaying: isPlaying,
+                imgUrl: thumbnail
             });
         } catch (err) {
             console.error('Error converting session to playback state:', err);
@@ -153,9 +164,13 @@ export class OSMediaDetector {
             this.stopPolling();
             this.stopPolling = null;
         }
-        if (this.mediaSessionManager) {
-            this.mediaSessionManager.removeAllListeners();
+        if (this.pollInterval) {
+            clearInterval(this.pollInterval);
+            this.pollInterval = null;
         }
+        this.sessionManager = null;
+        this.lastState = null;
+        this.lastSessionId = null;
     }
 
     /**

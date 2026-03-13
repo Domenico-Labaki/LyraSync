@@ -1,0 +1,1 @@
+declare module '@nodert-win11/windows.media.control';

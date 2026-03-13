@@ -1,36 +1,116 @@
+import { execFile } from 'child_process';
 import { PlaybackEvents } from './PlaybackEvents.js';
 import { PlaybackState } from './PlaybackState.js';
-import * as WindowsMediaControl from '@nodert-win11/windows.media.control';
 
-/**
- * OSMediaDetector handles playback detection from OS media controls
- * Uses Windows Media Control API for Windows 11/10 media session tracking
- */
+interface RawMediaInfo {
+    title: string;
+    artist: string;
+    isPlaying: boolean;
+    progressMs: number;
+    durationMs: number;
+    thumbnailBase64: string | null;  // <-- add this
+}
+
 export class OSMediaDetector {
-    private sessionManager: any = null;
     public playbackEvents = new PlaybackEvents();
     public stopPolling: (() => void) | null = null;
-    private lastSessionId: string | null = null;
     private lastState: PlaybackState | null = null;
     private initialized: boolean = false;
-    private pollInterval: NodeJS.Timeout | null = null;
 
-    /**
-     * Initialize the OS media controls detector
-     */
+    private static readonly PS_SCRIPT = `
+        Add-Type -AssemblyName System.Runtime.WindowsRuntime
+
+        function Await([object]$WinRtTask, [type]$ResultType) {
+            $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+                $_.Name -eq 'AsTask' -and
+                $_.GetParameters().Count -eq 1 -and
+                $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1'
+            })[0]
+            $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)
+            $task = $asTask.Invoke($null, @($WinRtTask))
+            $task.Wait() | Out-Null
+            $task.Result
+        }
+
+        try {
+            $mgrType = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager,Windows.Media.Control,ContentType=WindowsRuntime]
+            $mgr = Await $mgrType::RequestAsync() $mgrType
+            $propsType = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties]
+
+            $playing = $mgr.GetSessions() | ForEach-Object {
+                $info = $_.GetPlaybackInfo()
+                if ($info.PlaybackStatus -eq 4) {
+                    $props = Await $_.TryGetMediaPropertiesAsync() $propsType
+                    $tl = $_.GetTimelineProperties()
+                    $progress = [long]$tl.Position.TotalMilliseconds
+                    $duration = [long]$tl.EndTime.TotalMilliseconds
+
+                    # Get thumbnail as base64
+                    $thumbBase64 = ''
+                    try {
+                        $streamRefType = [Windows.Storage.Streams.IRandomAccessStreamReference]
+                        $thumbnail = $props.Thumbnail
+                        if ($thumbnail) {
+                            $streamRef = Await $thumbnail.OpenReadAsync() ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
+                            $reader = [Windows.Storage.Streams.DataReader]::new($streamRef)
+                            $size = [uint32]$streamRef.Size
+                            Await $reader.LoadAsync($size) ([uint32]) | Out-Null
+                            $bytes = [byte[]]::new($size)
+                            $reader.ReadBytes($bytes)
+                            $thumbBase64 = [Convert]::ToBase64String($bytes)
+                            $reader.DetachStream() | Out-Null
+                        }
+                    } catch { }
+
+                    "$($props.Title)|$($props.Artist)|1|$progress|$duration|$thumbBase64"
+                }
+            } | Select-Object -First 1
+
+            if (-not $playing) {
+                $session = $mgr.GetSessions() | Select-Object -First 1
+                if ($session) {
+                    $props = Await $session.TryGetMediaPropertiesAsync() $propsType
+                    $tl = $session.GetTimelineProperties()
+                    $progress = [long]$tl.Position.TotalMilliseconds
+                    $duration = [long]$tl.EndTime.TotalMilliseconds
+                    Write-Output "$($props.Title)|$($props.Artist)|0|$progress|$duration|"
+                }
+            } else {
+                Write-Output $playing
+            }
+        } catch {
+            exit 0
+        }
+    `;
+
+    private getRawMediaInfo(): Promise<RawMediaInfo | null> {
+        return new Promise((resolve) => {
+            execFile('powershell', ['-NoProfile', '-Command', OSMediaDetector.PS_SCRIPT], (err, stdout) => {
+                if (err || !stdout.trim()) return resolve(null);
+
+                const [title, artist, playing, progress, duration, thumb] = stdout.trim().split('|');
+                if (!title && !artist) return resolve(null);
+
+                resolve({
+                    title:           title  || 'Unknown Track',
+                    artist:          artist || 'Unknown Artist',
+                    isPlaying:       playing === '1',
+                    progressMs:      parseInt(progress) || 0,
+                    durationMs:      parseInt(duration) || 0,
+                    thumbnailBase64: thumb || null,
+                });
+            });
+        });
+    }
+
     public async initialize(): Promise<boolean> {
         try {
-            // Get the global media control session manager
-            this.sessionManager = await WindowsMediaControl.GlobalSystemMediaTransportControlsSessionManager.requestAsync();
-
-            if (!this.sessionManager) {
-                console.error('Failed to get Windows Media Control session manager');
-                return false;
-            }
-
-            console.log('Windows Media Control initialized successfully');
-
-            // Start polling for media session changes
+            // Verify PowerShell can reach the media session API before starting
+            const test = await this.getRawMediaInfo();
+            console.log(test !== null
+                ? 'Windows Media Control (PowerShell) initialized successfully'
+                : 'Windows Media Control initialized — no active session yet'
+            );
             this.startMonitoring();
             this.initialized = true;
             return true;
@@ -40,142 +120,74 @@ export class OSMediaDetector {
         }
     }
 
-    /**
-     * Start monitoring media session for playback changes
-     */
     private startMonitoring(): void {
-        if (!this.sessionManager) return;
-
-        const pollIntervalMs = 1000; // 1 second
+        const pollIntervalMs = 200;
         let shouldStop = false;
 
         const pollLoop = async () => {
             while (!shouldStop) {
                 try {
-                    if (!this.sessionManager) return;
+                    const raw = await this.getRawMediaInfo();
 
-                    // Get all active media sessions
-                    const sessions = this.sessionManager.getSessions();
-                    
-                    if (!sessions || sessions.length === 0) {
-                        // No active sessions
+                    if (!raw) {
                         if (this.lastState) {
                             this.lastState = null;
-                            this.lastSessionId = null;
                         }
                         await new Promise(r => setTimeout(r, pollIntervalMs));
                         continue;
                     }
 
-                    // Get the first active/current session
-                    const session = sessions[0];
-                    const sessionId = session.sourceAppUserModelId || session.nativeDisplayName || 'unknown';
-                    const playbackState = await this.convertSessionToPlaybackState(session);
+                    const trackId = `${raw.artist}|${raw.title}`.toLowerCase().replace(/\s+/g, '_');
 
-                    if (!playbackState) {
-                        await new Promise(r => setTimeout(r, pollIntervalMs));
-                        continue;
-                    }
+                    const playbackState = new PlaybackState({
+                        trackId,
+                        trackName:  raw.title,
+                        artist:     raw.artist,
+                        progressMs: raw.progressMs,
+                        durationMs: raw.durationMs,
+                        isPlaying:  raw.isPlaying,
+                        imgUrl: raw.thumbnailBase64
+                        ? `data:image/png;base64,${raw.thumbnailBase64}`
+                        : null,
+                    });
 
                     if (!this.lastState) {
-                        // First detection
                         this.playbackEvents.emit('playbackResumed', playbackState);
                     } else {
-                        // Check for changes
                         if (playbackState.trackId !== this.lastState.trackId) {
                             this.playbackEvents.emit('trackChanged', playbackState);
                         }
-
                         if (playbackState.isPlaying !== this.lastState.isPlaying) {
                             playbackState.isPlaying
                                 ? this.playbackEvents.emit('playbackResumed', playbackState)
                                 : this.playbackEvents.emit('playbackPaused', playbackState);
                         }
-
                         if (playbackState.progressMs !== this.lastState.progressMs) {
                             this.playbackEvents.emit('progressUpdated', playbackState);
                         }
                     }
 
                     this.lastState = playbackState;
-                    this.lastSessionId = sessionId;
-
-                    await new Promise(r => setTimeout(r, pollIntervalMs));
                 } catch (err) {
-                    console.error('Error monitoring media session:', err);
-                    await new Promise(r => setTimeout(r, pollIntervalMs));
+                    console.error('Error in media poll loop:', err);
                 }
+
+                await new Promise(r => setTimeout(r, pollIntervalMs));
             }
         };
 
-        // Start polling loop in background
         pollLoop().catch(err => console.error('Poll loop error:', err));
-
-        // Store stop function
-        this.stopPolling = () => {
-            shouldStop = true;
-        };
+        this.stopPolling = () => { shouldStop = true; };
     }
 
-    /**
-     * Convert Windows Media Control session to PlaybackState
-     */
-    private async convertSessionToPlaybackState(session: any): Promise<PlaybackState | null> {
-        try {
-            // Get metadata information
-            const mediaProperties = session.tryGetMediaPropertiesAsync();
-            if (!mediaProperties) return null;
-
-            const trackName = mediaProperties.title || 'Unknown Track';
-            const artist = mediaProperties.artist || 'Unknown Artist';
-            const duration = mediaProperties.subtitle ? parseInt(mediaProperties.subtitle) : 0;
-
-            // Get playback info
-            const playbackInfo = session.getPlaybackInfo();
-            const isPlaying = playbackInfo?.playbackStatus === 4; // 4 = Playing in Windows Media Control
-            const progress = playbackInfo?.controls?.position || 0;
-
-            // Create a unique track ID from artist + title
-            const trackId = `${artist}|${trackName}`.toLowerCase().replace(/\s+/g, '_');
-
-            // Try to get album art thumbnail
-            const thumbnail = mediaProperties.thumbnail || null;
-
-            return new PlaybackState({
-                trackId: trackId,
-                trackName: trackName,
-                artist: artist,
-                progressMs: progress,
-                durationMs: duration,
-                isPlaying: isPlaying,
-                imgUrl: thumbnail
-            });
-        } catch (err) {
-            console.error('Error converting session to playback state:', err);
-            return null;
-        }
-    }
-
-    /**
-     * Stop detecting media sessions
-     */
     public stop(): void {
         if (this.stopPolling) {
             this.stopPolling();
             this.stopPolling = null;
         }
-        if (this.pollInterval) {
-            clearInterval(this.pollInterval);
-            this.pollInterval = null;
-        }
-        this.sessionManager = null;
         this.lastState = null;
-        this.lastSessionId = null;
     }
 
-    /**
-     * Check if detector is initialized
-     */ 
     public isInitialized(): boolean {
         return this.initialized;
     }

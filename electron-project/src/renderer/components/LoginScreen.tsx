@@ -14,7 +14,7 @@ export function LoginScreen({ onSpotifyLogin, onGuestMode }: LoginScreenProps) {
         <img src={brandLogo} width="100px" style={styles.logo} />
         
         <div style={styles.title}>Welcome to LyraSync</div>
-        <div style={styles.subtitle}>Choose how to sync lyrics with your music</div>
+        {/* <div style={styles.subtitle}>Choose how to sync lyrics with your music</div> */}
 
         <div style={styles.optionsContainer}>
           {/* Spotify Option */}
@@ -30,7 +30,7 @@ export function LoginScreen({ onSpotifyLogin, onGuestMode }: LoginScreenProps) {
               e.currentTarget.style.boxShadow = '0 4px 8px rgba(29, 185, 84, 0.2)';
             }}
           >
-            <div style={styles.buttonIcon}>🎵</div>
+            {/* <div style={styles.buttonIcon}>🎵</div> */}
             <div style={styles.buttonTitle}>Sign in with Spotify</div>
             <div style={styles.buttonDescription}>
               Premium lyrics sync with Spotify playback
@@ -53,7 +53,7 @@ export function LoginScreen({ onSpotifyLogin, onGuestMode }: LoginScreenProps) {
               e.currentTarget.style.boxShadow = '0 4px 8px rgba(76, 175, 80, 0.2)';
             }}
           >
-            <div style={styles.buttonIcon}>🎧</div>
+            {/* <div style={styles.buttonIcon}>🎧</div> */}
             <div style={styles.buttonTitle}>Guest Mode</div>
             <div style={styles.buttonDescription}>
               Use OS media controls (any music player)
@@ -78,7 +78,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '20px',
+    padding: '5px',
     boxSizing: 'border-box',
     color: colors.text.primary,
   },
@@ -88,26 +88,26 @@ const styles: { [key: string]: React.CSSProperties } = {
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
-    gap: '20px',
+    gap: '0px',
   },
   logo: {
-    marginBottom: '10px',
+    marginBottom: '0px',
   },
   title: {
     fontSize: '24px',
     fontWeight: 'bold',
     color: colors.text.primary,
-    marginTop: '20px',
+    marginTop: '0px',
   },
   subtitle: {
     fontSize: '14px',
     color: colors.text.secondary,
-    marginBottom: '30px',
+    marginBottom: '0px',
   },
   optionsContainer: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '15px',
+    gap: '0px',
     width: '100%',
     maxWidth: '300px',
   },
@@ -125,7 +125,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '8px',
+    gap: '2px',
   },
   guestButton: {
     padding: '20px',
@@ -141,7 +141,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '8px',
+    gap: '2px',
   },
   buttonIcon: {
     fontSize: '28px',
@@ -153,7 +153,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   buttonDescription: {
     fontSize: '12px',
     opacity: 0.9,
-    marginTop: '4px',
+    marginTop: '0px',
   },
   divider: {
     display: 'flex',
@@ -161,7 +161,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     justifyContent: 'center',
     color: colors.text.secondary,
     fontSize: '12px',
-    margin: '10px 0',
+    margin: '0px 0',
   },
   footer: {
     fontSize: '12px',

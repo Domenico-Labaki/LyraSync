@@ -32,3 +32,22 @@ export function clearToken() {
 export async function clearCachedToken() {
     await keytar.deletePassword(SERVICE, "refresh_token");
 }
+
+// Guest mode preference stored persistently
+
+export async function setGuestModePreference(enabled: boolean) {
+    if (enabled) {
+        await keytar.setPassword(SERVICE, "guest_mode_enabled", "true");
+    } else {
+        await keytar.deletePassword(SERVICE, "guest_mode_enabled");
+    }
+}
+
+export async function getGuestModePreference(): Promise<boolean> {
+    const value = await keytar.getPassword(SERVICE, "guest_mode_enabled");
+    return value === "true";
+}
+
+export async function clearGuestModePreference() {
+    await keytar.deletePassword(SERVICE, "guest_mode_enabled");
+}

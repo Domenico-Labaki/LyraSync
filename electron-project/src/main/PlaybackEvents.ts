@@ -21,7 +21,7 @@ export class PlaybackEvents extends EventEmitter {
 
     private async sendToRenderer(state: PlaybackState, lyrics: LyricsResult | null = null) {
         if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-            this.mainWindow.webContents.send('playback-state-changed', {
+            const payload = {
                 trackId: state.trackId,
                 trackName: state.trackName,
                 artist: state.artist,
@@ -30,7 +30,13 @@ export class PlaybackEvents extends EventEmitter {
                 isPlaying: state.isPlaying,
                 imgUrl: state.imgUrl,
                 lyrics: lyrics
+            };
+            console.log('[PlaybackEvents] Sending to renderer:', {
+                track: payload.trackName,
+                hasImgUrl: !!payload.imgUrl,
+                imgUrlPreview: payload.imgUrl ? payload.imgUrl.substring(0, 50) : 'null'
             });
+            this.mainWindow.webContents.send('playback-state-changed', payload);
         }
     }
 

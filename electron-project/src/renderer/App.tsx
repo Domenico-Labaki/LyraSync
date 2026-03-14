@@ -44,6 +44,7 @@ export default function App() {
   // Update playback state
   useEffect(() => {
     window.api.onPlaybackStateChanged((state) => {
+      console.log('Playback state received:', state);
       if (!state) {
         setPlaybackState(null);
         setAuthStatus({ authenticated: false, source: null });
@@ -73,24 +74,39 @@ export default function App() {
   const plainLyricsRef = useRef<HTMLDivElement>(null);
   // Update cover URL when track changes
   useEffect(() => {
-    if (!oldTrackId || playbackState?.trackId !== oldTrackId) {
+    if (!oldTrackId || playbackState?.trackId != oldTrackId) {
       // Clear lyrics when track changes
       setPlaybackState(prev => prev ? { ...prev, lyrics: null } : null);
 
       if (plainLyricsRef.current) { // There currently exists plain lyrics container
         plainLyricsRef.current.scrollTop = 0;
       }
-      setCoverUrl(playbackState?.imgUrl ? playbackState.imgUrl : '');
       if (playbackState?.trackId) {
         setOldTrackId(playbackState.trackId);
       }
+      setCoverUrl('');
     }
-  }, [playbackState?.trackId, playbackState?.imgUrl, oldTrackId]);
+  }, [playbackState?.trackId, playbackState?.imgUrl]);
+
+  // Detect cover URL changes and update accent color
+  useEffect(() => {
+    if (!coverUrl || playbackState?.imgUrl != coverUrl) {
+      const newCoverUrl = playbackState?.imgUrl ? playbackState.imgUrl : '';
+      console.log('Setting coverUrl to:', newCoverUrl);
+      setCoverUrl(newCoverUrl);
+    }
+  }, [playbackState?.imgUrl]);
+
+
+  
 
   // Update background color when cover URL changes
   useEffect(() => {
+    console.log('Cover URL changed:', coverUrl);
     if (coverUrl) {
+      console.log('Extracting accent color from cover...');
       getAccentColor(coverUrl).then((accentColor: string) => {
+        console.log('Got accent color:', accentColor);
         setAccent(accentColor);
         const newBg = `linear-gradient(180deg, ${soften(accentColor)}, #212121)`;
         setBg(newBg);

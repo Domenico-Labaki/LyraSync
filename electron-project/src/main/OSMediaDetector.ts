@@ -9,6 +9,7 @@ interface RawMediaInfo {
     progressMs: number;
     durationMs: number;
     thumbnailBase64: string | null;  // <-- add this
+    contentType: string;
 }
 
 export class OSMediaDetector {
@@ -16,6 +17,7 @@ export class OSMediaDetector {
     public stopPolling: (() => void) | null = null;
     private lastState: PlaybackState | null = null;
     private initialized: boolean = false;
+    private thumbnail: string | null = null;
 
     private static readonly PS_SCRIPT = `
         Add-Type -AssemblyName System.Runtime.WindowsRuntime
@@ -44,25 +46,7 @@ export class OSMediaDetector {
                     $tl = $_.GetTimelineProperties()
                     $progress = [long]$tl.Position.TotalMilliseconds
                     $duration = [long]$tl.EndTime.TotalMilliseconds
-
-                    # Get thumbnail as base64
-                    $thumbBase64 = ''
-                    try {
-                        $streamRefType = [Windows.Storage.Streams.IRandomAccessStreamReference]
-                        $thumbnail = $props.Thumbnail
-                        if ($thumbnail) {
-                            $streamRef = Await $thumbnail.OpenReadAsync() ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
-                            $reader = [Windows.Storage.Streams.DataReader]::new($streamRef)
-                            $size = [uint32]$streamRef.Size
-                            Await $reader.LoadAsync($size) ([uint32]) | Out-Null
-                            $bytes = [byte[]]::new($size)
-                            $reader.ReadBytes($bytes)
-                            $thumbBase64 = [Convert]::ToBase64String($bytes)
-                            $reader.DetachStream() | Out-Null
-                        }
-                    } catch { }
-
-                    "$($props.Title)|$($props.Artist)|1|$progress|$duration|$thumbBase64"
+                    "$($props.Title)|$($props.Artist)|1|$progress|$duration"
                 }
             } | Select-Object -First 1
 
@@ -73,7 +57,7 @@ export class OSMediaDetector {
                     $tl = $session.GetTimelineProperties()
                     $progress = [long]$tl.Position.TotalMilliseconds
                     $duration = [long]$tl.EndTime.TotalMilliseconds
-                    Write-Output "$($props.Title)|$($props.Artist)|0|$progress|$duration|"
+                    Write-Output "$($props.Title)|$($props.Artist)|0|$progress|$duration"
                 }
             } else {
                 Write-Output $playing
@@ -86,10 +70,24 @@ export class OSMediaDetector {
     private getRawMediaInfo(): Promise<RawMediaInfo | null> {
         return new Promise((resolve) => {
             execFile('powershell', ['-NoProfile', '-Command', OSMediaDetector.PS_SCRIPT], (err, stdout) => {
-                if (err || !stdout.trim()) return resolve(null);
+                if (err || !stdout.trim()) {
+                    console.log('PowerShell error or empty output:', err?.message);
+                    return resolve(null);
+                }
 
-                const [title, artist, playing, progress, duration, thumb] = stdout.trim().split('|');
+                const parts = stdout.trim().split('|');
+                console.log('PowerShell output parts count:', parts.length, 'Raw output:', stdout.trim().substring(0, 100));
+                
+                const [title, artist, playing, progress, duration, thumb, contentType] = parts;
                 if (!title && !artist) return resolve(null);
+
+                console.log('Parsed media info:', {
+                    title,
+                    artist,
+                    hasThumbnail: !!thumb,
+                    thumbnailLength: thumb?.length || 0,
+                    contentType: contentType || 'image/png'
+                });
 
                 resolve({
                     title:           title  || 'Unknown Track',
@@ -98,9 +96,27 @@ export class OSMediaDetector {
                     progressMs:      parseInt(progress) || 0,
                     durationMs:      parseInt(duration) || 0,
                     thumbnailBase64: thumb || null,
+                    contentType:     contentType || 'image/png',
                 });
             });
         });
+    }
+
+    private async getAlbumArt(artist: string, title: string): Promise<string | null> {
+        try {
+            // Search Spotify public API (no auth needed for search)
+            const query = encodeURIComponent(`${artist} ${title}`);
+            const res = await fetch(`https://itunes.apple.com/search?term=${query}&media=music&limit=1`);
+            const data = await res.json();
+            
+            if (data.results?.length > 0) {
+                // iTunes returns 100x100, replace with 600x600
+                return data.results[0].artworkUrl100.replace('100x100', '600x600');
+            }
+            return null;
+        } catch {
+            return null;
+        }
     }
 
     public async initialize(): Promise<boolean> {
@@ -140,21 +156,22 @@ export class OSMediaDetector {
                     const trackId = `${raw.artist}|${raw.title}`.toLowerCase().replace(/\s+/g, '_');
 
                     const playbackState = new PlaybackState({
-                        trackId,
+                        trackId: `${raw.artist}::${raw.title}`.toLowerCase().trim().replace(/\s+/g, '_'),
                         trackName:  raw.title,
                         artist:     raw.artist,
                         progressMs: raw.progressMs,
                         durationMs: raw.durationMs,
                         isPlaying:  raw.isPlaying,
-                        imgUrl: raw.thumbnailBase64
-                        ? `data:image/png;base64,${raw.thumbnailBase64}`
-                        : null,
+                        imgUrl: this.thumbnail ? this.thumbnail : null,
                     });
+
+                    console.log(this.thumbnail);
 
                     if (!this.lastState) {
                         this.playbackEvents.emit('playbackResumed', playbackState);
                     } else {
-                        if (playbackState.trackId !== this.lastState.trackId) {
+                        if (playbackState.trackId !== this.lastState.trackId || this.thumbnail == null) {
+                            this.thumbnail = await this.getAlbumArt(raw.artist, raw.title);
                             this.playbackEvents.emit('trackChanged', playbackState);
                         }
                         if (playbackState.isPlaying !== this.lastState.isPlaying) {

@@ -1,7 +1,7 @@
 import { app, BrowserWindow, screen, ipcMain } from "electron";
 import path from "path";
 import { MediaSourceManager, MediaSource } from "./MediaSourceManager.js";
-import { clearToken, clearCachedToken } from "./TokenStore.js";
+import { clearToken, clearCachedToken, setGuestModePreference, getGuestModePreference, clearGuestModePreference } from "./TokenStore.js";
 import { SpotifyAuth } from "./SpotifyAuth.js";
 
 let win: BrowserWindow;
@@ -92,9 +92,10 @@ function createWindow() {
     try {
       await mediaSourceManager.stopSource();
       
-      // Clear Spotify tokens if Spotify was the source
+      // Clear all cached auth data
       clearToken();
       await clearCachedToken();
+      await clearGuestModePreference();
 
       // Inform renderer to clear UI and show login screen
       if (win && !win.isDestroyed()) {
@@ -109,7 +110,21 @@ function createWindow() {
   // Renderer ready: try to restore previous session
   ipcMain.on('renderer-ready', async () => {
     try {
-      // Try to restore Spotify session first
+      // Check if guest mode was previously enabled
+      const guestModeEnabled = await getGuestModePreference();
+      if (guestModeEnabled) {
+        const success = await mediaSourceManager.startSource('guest');
+        if (success) {
+          if (win && !win.isDestroyed()) {
+            win.webContents.send('auth-status', { authenticated: true, source: 'guest' });
+          }
+          return;
+        }
+        // If guest mode fails, clear the preference and fall through to show login
+        await clearGuestModePreference();
+      }
+
+      // Try to restore Spotify session
       const spotifyAuth = new SpotifyAuth(win);
       spotifyAuth.start();
       const spotifySuccess = await spotifyAuth.refreshLogin();
@@ -153,6 +168,9 @@ function createWindow() {
     try {
       const success = await mediaSourceManager.startSource('guest');
       if (success) {
+        // Save guest mode preference for next session
+        await setGuestModePreference(true);
+        
         if (win && !win.isDestroyed()) {
           win.webContents.send('auth-status', { authenticated: true, source: 'guest' });
         }

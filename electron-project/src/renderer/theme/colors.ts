@@ -7,10 +7,26 @@ export async function getAccentColor(imageUrl: string) {
         img.crossOrigin = "anonymous";
         img.src = imageUrl;
 
+        const timeout = setTimeout(() => {
+            resolve(hexToRGB(colors.primary.spotify));
+        }, 3000);
+
         img.onload = () => {
-        const colorThief = new ColorThief();
-        const [r, g, b] = colorThief.getColor(img);
-        resolve(`rgb(${r}, ${g}, ${b})`);
+            clearTimeout(timeout);
+            try {
+                const colorThief = new ColorThief();
+                const [r, g, b] = colorThief.getColor(img);
+                resolve(`rgb(${r}, ${g}, ${b})`);
+            } catch (err) {
+                console.error('Error extracting color from image:', err);
+                resolve(hexToRGB(colors.primary.spotify));
+            }
+        };
+
+        img.onerror = () => {
+            clearTimeout(timeout);
+            console.warn('Failed to load image for accent color:', imageUrl);
+            resolve(hexToRGB(colors.primary.spotify));
         };
     });
 }

@@ -32,9 +32,9 @@ export function LoginScreen({ onSpotifyLogin, onGuestMode }: LoginScreenProps) {
           >
             {/* <div style={styles.buttonIcon}>🎵</div> */}
             <div style={styles.buttonTitle}>Sign in with Spotify</div>
-            <div style={styles.buttonDescription}>
+            {/* <div style={styles.buttonDescription}>
               Premium lyrics sync with Spotify playback
-            </div>
+            </div> */}
           </button>
 
           {/* Divider */}
@@ -54,10 +54,10 @@ export function LoginScreen({ onSpotifyLogin, onGuestMode }: LoginScreenProps) {
             }}
           >
             {/* <div style={styles.buttonIcon}>🎧</div> */}
-            <div style={styles.buttonTitle}>Guest Mode</div>
-            <div style={styles.buttonDescription}>
+            <div style={styles.buttonTitle}>Local Mode</div>
+            {/* <div style={styles.buttonDescription}>
               Use OS media controls (any music player)
-            </div>
+            </div> */}
           </button>
         </div>
       </div>
@@ -98,6 +98,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontWeight: 'bold',
     color: colors.text.primary,
     marginTop: '0px',
+    marginBottom: '10px',
   },
   subtitle: {
     fontSize: '14px',
@@ -112,7 +113,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     maxWidth: '300px',
   },
   spotifyButton: {
-    padding: '20px',
+    padding: '5px',
     borderRadius: '8px',
     border: 'none',
     backgroundColor: '#1DB954',
@@ -128,7 +129,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     gap: '2px',
   },
   guestButton: {
-    padding: '20px',
+    padding: '5px',
     borderRadius: '8px',
     border: 'none',
     backgroundColor: '#4CAF50',
@@ -161,7 +162,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     justifyContent: 'center',
     color: colors.text.secondary,
     fontSize: '12px',
-    margin: '0px 0',
+    margin: '2px 0',
   },
   footer: {
     fontSize: '12px',

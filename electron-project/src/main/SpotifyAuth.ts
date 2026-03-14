@@ -40,6 +40,7 @@ export class SpotifyAuth {
     private app = express();
     public playbackEvents = new PlaybackEvents();
     public stopPolling: (() => void) | null = null;
+    private isPollingActive = false;
 
     constructor(mainWindow: BrowserWindow) {
         this.setupCallbackRoute();
@@ -48,6 +49,7 @@ export class SpotifyAuth {
 
     public async openAuthUrl() {
         try {
+            console.log("Opening browser for Spotify login...");
             const authUrl =
                 `https://accounts.spotify.com/authorize` +
                 `?response_type=code` +
@@ -92,7 +94,10 @@ export class SpotifyAuth {
 
                 res.send("Spotify authorization successful! You can close this tab.");
                 
-                this.stopPolling = startPolling(this.playbackEvents, 1000);
+                // Only start polling if not already active
+                if (!this.isPollingActive) {
+                    this.startPollingInternal(1000);
+                }
 
             } catch (err) {
                 console.error(err);
@@ -122,6 +127,24 @@ export class SpotifyAuth {
         return response.data.access_token;
     }
 
+    private startPollingInternal(intervalMs: number): void {
+        if (this.isPollingActive) {
+            console.warn('Polling is already active');
+            return;
+        }
+
+        this.isPollingActive = true;
+        this.stopPolling = startPolling(this.playbackEvents, intervalMs);
+    }
+
+    public stopPollingInternal(): void {
+        if (this.stopPolling) {
+            this.stopPolling();
+            this.stopPolling = null;
+        }
+        this.isPollingActive = false;
+    }
+
     public async refreshLogin() {
         
         const refreshToken = await getRefreshToken();
@@ -133,7 +156,10 @@ export class SpotifyAuth {
                 const accessToken = await this.refreshAccessToken(refreshToken);
                 setAccessToken(accessToken);
 
-                this.stopPolling = startPolling(this.playbackEvents, 1000);
+                // Only start polling if not already active
+                if (!this.isPollingActive) {
+                    this.startPollingInternal(1000);
+                }
                 return true;
             } catch (err) {
                 console.error("Refresh failed, forcing re-login");

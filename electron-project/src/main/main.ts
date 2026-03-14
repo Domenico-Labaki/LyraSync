@@ -151,16 +151,10 @@ function createWindow() {
 
   // Start Spotify login flow
   ipcMain.on('start-spotify-login', async () => {
-    try {
       const success = await mediaSourceManager.startSource('spotify');
-      if (success) {
-        mediaSourceManager.initiateSpotifyLogin();
-      } else {
-        console.error('Failed to initialize Spotify source');
+      if (!success) {
+        await mediaSourceManager.initiateSpotifyLogin();
       }
-    } catch (err) {
-      console.error('Spotify login error:', err);
-    }
   });
 
   // Start Guest Mode (OS media controls)

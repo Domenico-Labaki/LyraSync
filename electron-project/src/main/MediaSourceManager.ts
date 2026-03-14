@@ -61,8 +61,7 @@ export class MediaSourceManager {
                 this.currentSource = 'spotify';
                 return true;
             }
-
-            // No existing session, need to prompt for login
+            // No existing session
             return false;
         } catch (err) {
             console.error('Failed to initialize Spotify source:', err);
@@ -147,12 +146,8 @@ export class MediaSourceManager {
     /**
      * Initiate login flow for Spotify
      */
-    public initiateSpotifyLogin(): void {
-        if (!this.spotifyAuth) {
-            console.error('Spotify auth not initialized');
-            return;
-        }
-        this.spotifyAuth.openAuthUrl();
+    public async initiateSpotifyLogin(): Promise<void> {
+        await this.spotifyAuth?.openAuthUrl();
     }
 
     /**
@@ -160,9 +155,8 @@ export class MediaSourceManager {
      */
     public async stopSource(): Promise<void> {
         if (this.currentSource === 'spotify' && this.spotifyAuth) {
-            if (this.spotifyAuth.stopPolling) {
-                this.spotifyAuth.stopPolling();
-            }
+            // Use the new internal method to properly stop polling
+            this.spotifyAuth.stopPollingInternal();
         } else if (this.currentSource === 'guest' && this.osMediaDetector) {
             this.osMediaDetector.stop();
         }

@@ -238,6 +238,65 @@ function createWindow() {
       console.error('Guest mode error:', err);
     }
   });
+
+  ipcMain.handle("align-track", async (_event, params: {
+    title:       string;
+    artist:      string;
+    durationSec: number | null;
+    lyrics:      string;
+    trackId:     string;
+  }) => {
+    const body = JSON.stringify({
+      title:        params.title,
+      artist:       params.artist,
+      duration_sec: params.durationSec,
+      lyrics:       params.lyrics,
+      lyrics_type:  "plain",
+      track_id:     params.trackId,
+    });
+  
+    return new Promise((resolve, reject) => {
+      const req = http.request(
+        {
+          hostname: "127.0.0.1",
+          port:     PYTHON_PORT,
+          path:     "/align",
+          method:   "POST",
+          headers:  {
+            "Content-Type":   "application/json",
+            "Content-Length": Buffer.byteLength(body),
+          },
+        },
+        (res) => {
+          let data = "";
+          res.setEncoding("utf8");
+          res.on("data", (chunk) => { data += chunk; });
+          res.on("end", () => {
+            try {
+              const parsed = JSON.parse(data);
+              if (res.statusCode === 200) {
+                resolve(parsed);
+              } else {
+                // Return a typed error so the renderer can handle it gracefully
+                reject(new Error(parsed?.detail?.message ?? `HTTP ${res.statusCode}`));
+              }
+            } catch {
+              reject(new Error("Failed to parse alignment response"));
+            }
+          });
+        }
+      );
+  
+      req.on("error", (err) => reject(err));
+      req.setTimeout(180_000, () => {   // 3 min — Demucs can be slow
+        req.destroy();
+        reject(new Error("Alignment timed out"));
+      });
+  
+      req.write(body);
+      req.end();
+    });
+  });
 }
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────

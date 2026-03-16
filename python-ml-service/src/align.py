@@ -35,6 +35,8 @@ from typing import Callable, Optional
 
 import torch
 import torchaudio
+import numpy as np
+import soundfile as sf
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +120,9 @@ def _separate_vocals(
     model = get_model(DEMUCS_MODEL)
     model.eval()
 
-    waveform, sr = torchaudio.load(wav_path)
+    audio_np, sr = sf.read(wav_path, dtype="float32", always_2d=True)
+    waveform = torch.from_numpy(audio_np.T)  # (channels, samples)
+
 
     # Demucs expects 44,100 Hz — resample if needed
     if sr != model.samplerate:
@@ -145,7 +149,7 @@ def _separate_vocals(
         )(vocals_mono)
 
     vocals_path = os.path.join(out_dir, "vocals.wav")
-    torchaudio.save(vocals_path, vocals_mono, TARGET_SR)
+    sf.write(vocals_path, vocals_mono.squeeze(0).numpy(), TARGET_SR)
 
     # Free Demucs from memory before loading whisper
     del model, sources, waveform, vocals, vocals_mono
@@ -407,8 +411,9 @@ def align_track(
     if not lyric_lines:
         raise ValueError("lyrics string contains no non-empty lines.")
 
-    info         = torchaudio.info(wav_path)
-    duration_sec = info.num_frames / info.sample_rate
+    import soundfile as sf
+    audio_info   = sf.info(wav_path)
+    duration_sec = audio_info.frames / audio_info.samplerate
 
     _progress(cb, "Starting…", 0)
 

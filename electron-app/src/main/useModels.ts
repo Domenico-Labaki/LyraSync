@@ -50,27 +50,27 @@ export function useModelManager(): ModelManagerState {
   const progressRef = useRef<Record<string, ModelProgress>>({});
 
   useEffect(() => {
-    const { modelManager } = window;
+    const { api } = window;
 
-    if (!modelManager) {
+    if (!api) {
       // Running outside Electron (e.g. browser dev) — mark as ready immediately
       setModelsReady(true);
       return;
     }
 
-    modelManager.onProgress((event: ModelProgress) => {
+    api.onProgress((event: ModelProgress) => {
       // Update the progress map for this model
       const updated = { ...progressRef.current, [event.model]: event };
       progressRef.current = updated;
       setProgress(updated);
     });
 
-    modelManager.onReady(() => {
+    api.onReady(() => {
       setModelsReady(true);
     });
 
     return () => {
-      modelManager.removeAllListeners();
+      api.removeAllListeners();
     };
   }, []);
 

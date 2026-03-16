@@ -181,8 +181,12 @@ def _whisper_ready() -> bool:
     installed = _load_installed_versions()
     if installed.get("faster-whisper") != MODEL_VERSIONS["faster-whisper"]:
         return False
+    # faster-whisper uses HuggingFace cache structure — walk subdirectories
     mdir = model_dir("faster-whisper")
-    return os.path.exists(os.path.join(mdir, "model.bin"))
+    for root, dirs, files in os.walk(mdir):
+        if "model.bin" in files:
+            return True
+    return False
 
 
 READY_CHECKS = {

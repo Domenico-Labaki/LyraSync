@@ -25,9 +25,9 @@ export var auth: SpotifyAuth | null = null;
 // ── Python service ────────────────────────────────────────────────────────────
 
 function spawnPythonService(): void {
-  const isDev  = process.env.NODE_ENV === "development";
+  const isDev = !app.isPackaged; // const isDev  = process.env.NODE_ENV === "development";
   const script = isDev
-    ? path.join(__dirname, "../../python-ml-service/src/app.py")
+    ? path.join(__dirname, "../../../python-ml-service/src/app.py")
     : path.join(process.resourcesPath, "lyrasync-aligner");
 
   const proc = isDev

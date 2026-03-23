@@ -346,6 +346,8 @@ def _parse_llm_response(
 
     try:
         parsed = json.loads(clean)
+        if not isinstance(parsed, list) and "lyrics" in parsed:
+            parsed = parsed["lyrics"]
         if not isinstance(parsed, list):
             raise ValueError("Expected a JSON array at top level")
     except (json.JSONDecodeError, ValueError) as exc:

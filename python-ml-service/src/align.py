@@ -242,15 +242,27 @@ Input:
 - LYRICS: clean song lyrics numbered 0–N in order
 - SEGMENTS: Whisper output with start/end times in seconds
 
-Rules:
+CRITICAL RULES:
+- Every lyric line must have unique, non-overlapping timeframes.
+- Each line maps to one or more segments; timestamps span first segment start to last segment end.
+- When multiple lines map to the same segment, you MUST split the time proportionally by word count.
+
+EXAMPLE - Proportional splitting:
+  If segment [5.0 → 10.0] contains TWO lines:
+    - Line A: "Hello world" (2 words)
+    - Line B: "How are you today" (4 words)
+  
+  Total words = 6. Duration = 5.0 seconds. Rate = 5.0/6 ≈ 0.833 sec/word.
+  
+  - Line A: start=5.0, end=5.0 + 2*0.833 = 6.666
+  - Line B: start=6.666, end=6.666 + 4*0.833 = 10.0 ✓
+
+OTHER RULES:
 - Match despite ASR errors (wrong words, merged/split lines).
-- Every lyric line appears in output exactly once, in original order.
-- For each line, find its segment(s) and assign timestamps.
-- If a line shares a segment with others, divide time proportionally by word count.
 - If a line is not found (instrumental, inaudible), set start/end to null, confidence to 0.0.
 - confidence: 1.0 = exact match, 0.5 = found with errors, 0.0 = not found.
 - Output ONLY valid JSON array, no markdown or extra text.
-- CRITICAL: all "start" and "end" must be pre-computed decimals, never expressions.
+- All "start" and "end" must be pre-computed decimals, NEVER expressions or division symbols.
 
 Output format — JSON array, one object per line in order:
 [
@@ -304,15 +316,11 @@ def _parse_llm_response(
     duration:    float,
 ) -> tuple[list[dict], bool]:
     """
-    Parse the LLM's JSON response into the sentences list.
-
-    Handles two failure modes gracefully:
-      - Malformed / partial JSON: missing lines are interpolated.
-      - null timestamps (LLM marked a line as not found): interpolated
-        between the nearest valid neighbours.
-
-    Also enforces strict monotonicity — timestamps never go backwards.
-
+    Parse the LLM's JSON response directly with zero post-processing.
+    
+    The LLM output is the source of truth — we extract it as-is.
+    No interpolation, no monotonicity enforcement, no timestamp adjustment.
+    
     Returns (sentences, used_fallback).
     """
     used_fallback = False
@@ -324,126 +332,162 @@ def _parse_llm_response(
         clean = re.sub(r"\n?```$",        "", clean)
         clean = clean.strip()
 
-    # Evaluate any arithmetic expressions the LLM wrote instead of literals.
-    # JSON does not allow expressions like "2.70 + (10.72 - 2.70) / 9", but
-    # some models produce them anyway despite being told not to.  This regex
-    # finds every JSON value position that contains arithmetic operators and
-    # replaces it with the pre-computed float.  It only matches sequences of
-    # digits, spaces, and the four operators — it will never touch string values.
-    def _eval_expr(m: re.Match) -> str:
-        expr = m.group(1).strip()
-        # Only evaluate if the expression actually contains an operator —
-        # plain numbers like "12.34" should pass through untouched.
-        if not re.search(r"[+\-*/]", expr):
-            return m.group(0)
-        try:
-            result = float(eval(expr, {"__builtins__": {}}, {}))
-            return f": {round(result, 3)}"
-        except Exception:
-            return m.group(0)   # leave unchanged if eval fails
-
-    clean = re.sub(r":\s*([\d\s.+\-*/()]+)", _eval_expr, clean)
-
     try:
         parsed = json.loads(clean)
-        if not isinstance(parsed, list) and "lyrics" in parsed:
+        # If wrapped in {"lyrics": [...]}, extract the array
+        if isinstance(parsed, dict) and "lyrics" in parsed:
             parsed = parsed["lyrics"]
         if not isinstance(parsed, list):
             raise ValueError("Expected a JSON array at top level")
     except (json.JSONDecodeError, ValueError) as exc:
         logger.error(f"LLM returned unparseable JSON: {exc}\nRaw:\n{raw[:500]}")
-        parsed        = []
-        used_fallback = True
+        return [], True
 
-    # Build lookup by line text (for fallback) and by position (primary)
-    parsed_by_text: dict[str, dict] = {}
-    for item in parsed:
-        if isinstance(item, dict) and "line" in item:
-            parsed_by_text[item["line"].strip()] = item
-
-    # Match each lyric line to its parsed entry
+    # Extract each entry exactly as the LLM provided it
     sentences: list[dict] = []
-    for i, line in enumerate(lyric_lines):
-        # Try positional match first — LLM is instructed to return in order
-        item = parsed[i] if i < len(parsed) and isinstance(parsed[i], dict) else None
-
-        # If the positional entry's text doesn't match, fall back to text lookup
-        if item is None or item.get("line", "").strip() != line.strip():
-            item = parsed_by_text.get(line.strip())
-
-        start = item.get("start") if item else None
-        end   = item.get("end")   if item else None
-        conf  = float(item.get("confidence", 0.0)) if item else 0.0
-
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        
+        line = item.get("line", "").strip()
+        start = item.get("start")
+        end = item.get("end")
+        confidence = item.get("confidence", 0.0)
+        
+        # Type conversion only — no semantic changes
+        try:
+            start = round(float(start), 3) if start is not None else None
+            end = round(float(end), 3) if end is not None else None
+            confidence = round(float(confidence), 3)
+        except (TypeError, ValueError):
+            start = end = None
+            confidence = 0.0
+        
+        sentences.append({
+            "line": line,
+            "start": start,
+            "end": end,
+            "confidence": confidence,
+        })
+        
+        # Mark as fallback if any line was marked as not found by the LLM
         if start is None or end is None:
             used_fallback = True
-            sentences.append({"line": line, "start": None, "end": None, "confidence": 0.0})
-        else:
-            sentences.append({
-                "line":       line,
-                "start":      round(float(start), 3),
-                "end":        round(float(end),   3),
-                "confidence": round(conf, 3),
-            })
-
-    # Interpolate lines whose timestamps are still None
-    n = len(sentences)
-    for i in range(n):
-        if sentences[i]["start"] is not None:
-            continue
-
-        prev_end = next(
-            (sentences[k]["end"]   for k in range(i - 1, -1, -1) if sentences[k]["end"]   is not None),
-            0.0,
-        )
-        next_start = next(
-            (sentences[k]["start"] for k in range(i + 1, n)       if sentences[k]["start"] is not None),
-            duration,
-        )
-
-        # Collect all consecutive None lines in this same gap
-        gap = [
-            k for k in range(n)
-            if sentences[k]["start"] is None
-            and next(
-                (sentences[m]["end"]   for m in range(k-1, -1, -1) if sentences[m]["end"]   is not None),
-                0.0,
-            ) == prev_end
-            and next(
-                (sentences[m]["start"] for m in range(k+1, n)       if sentences[m]["start"] is not None),
-                duration,
-            ) == next_start
-        ]
-        if i not in gap:
-            gap = [i]
-
-        pos   = gap.index(i)
-        n_gap = len(gap)
-
-        if prev_end >= next_start:
-            step  = 2.0
-            start = round(prev_end + pos * step, 3)
-            end   = round(start + step, 3)
-        else:
-            step  = (next_start - prev_end) / n_gap
-            start = round(prev_end + pos * step, 3)
-            end   = round(min(start + step, next_start), 3)
-
-        sentences[i]["start"] = start
-        sentences[i]["end"]   = end
-
-    # Monotonicity clamp — belt-and-suspenders guard against any LLM quirks
-    cursor = 0.0
-    for s in sentences:
-        if s["start"] < cursor:
-            dur            = max(s["end"] - s["start"], 0.0)
-            s["start"]     = round(cursor, 3)
-            s["end"]       = round(cursor + dur, 3)
-            s["confidence"] = 0.0
-            used_fallback   = True
-        cursor = max(cursor, s["end"])
-
+        
+    
     return sentences, used_fallback
+
+
+def _resolve_overlaps(sentences: list[dict]) -> None:
+    """
+    Resolve overlapping segments by splitting proportionally by word count.
+    
+    Modifies sentences in-place. When consecutive lines share overlapping
+    time ranges, divides the overlap proportionally based on word counts.
+    
+    This implements the LLM's intended behavior when it fails to split
+    shared segments correctly.
+    """
+    n = len(sentences)
+    i = 0
+    
+    while i < n:
+        # Find the range of lines that overlap with line i
+        if sentences[i]["start"] is None:
+            i += 1
+            continue
+        
+        # Collect all consecutive lines that overlap with line i
+        group = [i]
+        for j in range(i + 1, n):
+            if sentences[j]["start"] is None:
+                break
+            # Check if line j overlaps with the current group's span
+            group_end = max(sentences[k]["end"] for k in group)
+            if sentences[j]["start"] < group_end:
+                group.append(j)
+            else:
+                break
+        
+        # If no overlaps, move on
+        if len(group) == 1:
+            i += 1
+            continue
+        
+        # Overlaps detected — split proportionally by word count
+        group_start = sentences[group[0]]["start"]
+        group_end = sentences[group[-1]]["end"]
+        duration = group_end - group_start
+        
+        # Count total words in the group
+        total_words = sum(len(sentences[k]["line"].split()) for k in group)
+        
+        if total_words == 0:
+            i += len(group)
+            continue
+        
+        # Assign time proportionally
+        cursor = group_start
+        for k in group:
+            word_count = len(sentences[k]["line"].split())
+            portion = (word_count / total_words) * duration
+            sentences[k]["start"] = round(cursor, 3)
+            sentences[k]["end"] = round(cursor + portion, 3)
+            cursor += portion
+        
+        # Ensure the last line in the group reaches the original end
+        sentences[group[-1]]["end"] = round(group_end, 3)
+        
+        i += len(group)
+
+
+def _interpolate_missing_lines(sentences: list[dict], duration: float) -> None:
+    """
+    Interpolate timestamps for lines where the LLM couldn't find a match (null start/end).
+    
+    For each null-timestamp line, estimates time based on neighbors:
+      - Finds the last valid timestamp before it
+      - Finds the first valid timestamp after it
+      - Divides the gap evenly among all consecutive null lines in that span
+    
+    Modifies sentences in-place.
+    """
+    n = len(sentences)
+    i = 0
+    
+    while i < n:
+        if sentences[i]["start"] is not None:
+            i += 1
+            continue
+        
+        # Collect all consecutive null lines starting at i
+        null_group = [i]
+        for j in range(i + 1, n):
+            if sentences[j]["start"] is None:
+                null_group.append(j)
+            else:
+                break
+        
+        # Find boundaries
+        prev_idx = next((k for k in range(i - 1, -1, -1) if sentences[k]["end"] is not None), -1)
+        next_idx = next((k for k in range(i + len(null_group), n) if sentences[k]["start"] is not None), -1)
+        
+        prev_end = sentences[prev_idx]["end"] if prev_idx >= 0 else 0.0
+        next_start = sentences[next_idx]["start"] if next_idx >= 0 else duration
+        
+        # Divide the gap evenly among null lines
+        gap_duration = next_start - prev_end
+        step = gap_duration / len(null_group)
+        
+        for idx, k in enumerate(null_group):
+            sentences[k]["start"] = round(prev_end + idx * step, 3)
+            sentences[k]["end"] = round(prev_end + (idx + 1) * step, 3)
+        
+        # Ensure last null line doesn't exceed next_start
+        if null_group and next_idx >= 0:
+            sentences[null_group[-1]]["end"] = round(next_start, 3)
+        
+        i += len(null_group)
 
 
 def _match_lines_to_segments(
@@ -488,6 +532,12 @@ def _match_lines_to_segments(
     logger.info("=== End LLM response ===")
 
     sentences, used_fallback = _parse_llm_response(raw, lyric_lines, duration)
+    
+    # Resolve any overlapping segments by splitting proportionally
+    _resolve_overlaps(sentences)
+    
+    # Interpolate lines that the LLM couldn't find (null timestamps)
+    _interpolate_missing_lines(sentences, duration)
 
     _progress(on_progress, "Matching complete", 85)
     return sentences, used_fallback

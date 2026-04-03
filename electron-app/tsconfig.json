@@ -3,12 +3,13 @@
     /* Language & Output */
     "target": "ES2022",
     "lib": ["ES2022", "DOM"],
+    "rootDir": "src",
     "outDir": "dist",
     "sourceMap": true,
 
     /* Module System */
     "module": "CommonJS",
-    "moduleResolution": "Node",
+    //"moduleResolution": "Node",
 
     /* React */
     "jsx": "react-jsx",

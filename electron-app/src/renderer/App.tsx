@@ -153,6 +153,7 @@ export default function App() {
 
     const shouldAlign =
       lyrics?.plain &&
+      lyrics?.plain != 'No lyrics found' &&
       !lyrics?.synced &&
       trackId &&
       title &&

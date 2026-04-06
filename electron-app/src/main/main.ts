@@ -297,6 +297,49 @@ function createWindow() {
       req.end();
     });
   });
+
+  ipcMain.on('close-app', () => {
+    try {
+      stopModelManager();
+      
+      // Gracefully shut down the Python service (whether it's a spawned process or external)
+      const shutdownReq = http.request(
+        {
+          hostname: "127.0.0.1",
+          port: PYTHON_PORT,
+          path: "/shutdown",
+          method: "POST",
+        },
+        (res) => {
+          res.resume(); // consume response
+          console.log("[main] Python service shutdown signal sent");
+        }
+      );
+      
+      shutdownReq.on("error", () => {
+        // Service may already be stopped or unreachable — that's fine
+        console.log("[main] Python service not reachable (may already be stopped)");
+      });
+      
+      shutdownReq.setTimeout(2000, () => {
+        shutdownReq.destroy();
+      });
+      
+      shutdownReq.end();
+      
+      // Kill spawned process if it exists (dev mode)
+      if (pythonProcess && !pythonProcess.killed) {
+        pythonProcess.kill();
+      }
+    } catch (err) {
+      console.error('Error shutting down services:', err);
+    }
+    
+    // Exit after brief delay to allow shutdown signal to be sent
+    setTimeout(() => {
+      app.quit();
+    }, 500);
+  });
 }
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────

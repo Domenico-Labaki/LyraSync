@@ -35,6 +35,9 @@ contextBridge.exposeInMainWorld("api", {
     logout: () => {
         ipcRenderer.send('logout');
     },
+    closeApp: () => {
+        ipcRenderer.send('close-app');
+    },
     onAuthStatus: (callback: (status: AuthStatus) => void) => {
         ipcRenderer.on('auth-status', (_, status) => callback(status));
     },

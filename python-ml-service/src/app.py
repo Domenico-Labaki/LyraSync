@@ -252,6 +252,19 @@ def clear_cache() -> dict:
     return {"deleted": n}
 
 
+@app.post("/shutdown")
+async def shutdown() -> dict:
+    """
+    Graceful shutdown endpoint called by Electron on close.
+    Logs shutdown request and initiates service termination.
+    """
+    logger.info("Shutdown request received from Electron")
+    import asyncio
+    # Schedule shutdown on next event loop iteration
+    asyncio.get_event_loop().call_soon(lambda: os._exit(0))
+    return {"status": "shutting_down"}
+
+
 # ── Dev entry ─────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

@@ -32,6 +32,7 @@ declare global {
       rendererReady: () => void;
       setFocusMode: (enabled: boolean) => void;
       logout: () => void;
+      closeApp: () => void;
       onProgress: (cb: (event: ModelProgressEvent) => void) => void;
       onReady: (cb: () => void) => void;
       removeAllListeners: () => void;
@@ -318,7 +319,7 @@ export default function App() {
   }
 
   function exit() {
-    window.close();
+    window.api.closeApp();
   }
 
   useEffect(() => {
